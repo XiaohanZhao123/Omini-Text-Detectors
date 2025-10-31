@@ -1,0 +1,57 @@
+# Python
+*.pyc
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Model cache and weights
+**/cache/
+*.pth
+*.pt
+*.bin
+*.safetensors
+
+# Training checkpoints and results
+**/checkpoint-*/
+**/results_*/
+**/results/
+
+# Experiment data and outputs
+**/exp_*/data/
+**/exp_*/results/
+**/exp_*/model/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project-specific
+.claude/
+.serena/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/

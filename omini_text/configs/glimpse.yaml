@@ -1,0 +1,98 @@
+# Glimpse AI Text Detector Configuration
+# Zero-shot detection using probability distribution estimation with proprietary models
+
+# Model selection
+model: glimpse
+
+# =============================================================================
+# Scoring Model Configuration
+# =============================================================================
+# Choose the proprietary model to use for detection
+# Options: davinci-002, babbage-002, gpt-35-turbo-1106
+# Trade-off: babbage-002 (cheapest) vs davinci-002 (better accuracy) vs gpt-35-turbo-1106 (best)
+scoring_model_name: davinci-002
+
+# =============================================================================
+# API Configuration
+# =============================================================================
+# API endpoint URL
+# For OpenAI: https://api.openai.com/v1
+# For Azure OpenAI: https://your-resource.openai.azure.com/
+api_base: https://api.openai.com/v1
+
+# API version (for Azure OpenAI only)
+api_version: 2023-09-15-preview
+
+# NOTE: API keys are loaded from .env file, NOT from this config
+# Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in your .env file
+
+# =============================================================================
+# Distribution Estimation Configuration
+# =============================================================================
+# Distribution estimator type
+# Options: geometric, zipfian, mlp
+# Recommendation: geometric (best balance of accuracy and simplicity)
+estimator: geometric
+
+# Number of tokens to estimate in probability distribution
+# Range: 100-5000
+# Trade-off: Higher values = better accuracy but higher API cost
+# Recommendation: 1000 for good balance
+rank_size: 1000
+
+# Number of top tokens to retrieve from API
+# Range: 5-10
+# Note: OpenAI Completion API typically supports up to 10
+top_k: 5
+
+# =============================================================================
+# Prompt Configuration
+# =============================================================================
+# Prompt variant to use for API calls
+# Options: prompt0, prompt1, prompt2, prompt3, prompt4
+# Recommendation: prompt3 (best performance in paper)
+# - prompt0: Empty prompt
+# - prompt3: System + Assistant role prompts (recommended)
+# - prompt4: Alternative Assistant + User role prompts
+prompt: prompt3
+
+# =============================================================================
+# Detection Configuration
+# =============================================================================
+# Classification threshold
+# Range: 0.0-1.0
+# Texts with score >= threshold are classified as AI-generated (label=1)
+# Trade-off: Higher threshold = more precision, lower recall
+threshold: 0.5
+
+# =============================================================================
+# Optional: Device Configuration
+# =============================================================================
+# Glimpse runs on CPU and doesn't require GPU
+# No device configuration needed
+
+# =============================================================================
+# Performance Notes
+# =============================================================================
+# - Glimpse is designed for API-based models and runs efficiently on CPU
+# - API costs depend on text length and rank_size parameter
+# - Longer texts generally provide more reliable detection
+# - Minimum recommended text length: 50 tokens
+# - Each detection requires 1 API call to the scoring model
+
+# =============================================================================
+# Accuracy Benchmarks (from ICLR 2025 paper)
+# =============================================================================
+# Model                    | English AUROC | Multi-language AUROC
+# -------------------------|---------------|---------------------
+# babbage-002 + geometric  | 82.15%        | Varies by language
+# davinci-002 + geometric  | 84.60%        | Better than babbage
+# gpt-35-turbo + geometric | 88.94%        | Best performance
+
+# =============================================================================
+# Cost Estimates (Approximate, check OpenAI pricing)
+# =============================================================================
+# babbage-002: Lowest cost (~$0.0004/1K tokens)
+# davinci-002: Medium cost (~$0.002/1K tokens)
+# gpt-35-turbo: Higher cost (~$0.0005-0.001/1K tokens for completion API)
+# Note: Costs are for legacy Completion API models
