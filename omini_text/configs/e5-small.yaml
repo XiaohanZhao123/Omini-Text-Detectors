@@ -1,99 +1,29 @@
-# E5-Small LoRA AI Text Detector Configuration
-# Supervised detection using fine-tuned e5-small model with LoRA adaptation
+# E5-Small LoRA Detector (93.9% accuracy on RAID benchmark)
+# Supervised detector using fine-tuned e5-small with LoRA adaptation
+# See docs/CONFIGURATION.md for detailed parameter descriptions
 
-# Model selection
 model: e5-small
 
-# =============================================================================
 # Model Configuration
-# =============================================================================
-# HuggingFace model path
-# Default: Use the pre-trained model from HuggingFace Hub
-# Alternative: Use local checkpoint path (e.g., baseline/e5_small/ML-LoRA-E5/...)
-model_path: MayZhou/e5-small-lora-ai-generated-detector
+model_path: MayZhou/e5-small-lora-ai-generated-detector  # HuggingFace path or local checkpoint
 
-# =============================================================================
 # Device Configuration
-# =============================================================================
-# Device to use for inference
-# Options: auto, cuda, cpu
-# - auto: Automatically use GPU if available, otherwise CPU
-# - cuda: Force GPU usage (requires CUDA-capable GPU)
-# - cpu: Force CPU usage
-# Recommendation: auto (optimal for most cases)
-device: auto
+device: auto  # Options: auto (recommended), cuda, cpu
 
-# =============================================================================
 # Detection Configuration
-# =============================================================================
-# Classification threshold
-# Range: 0.0-1.0
-# Texts with score >= threshold are classified as AI-generated (label=1)
-# Trade-off: Higher threshold = more precision, lower recall
-# Recommendation: 0.5 for balanced precision/recall
-threshold: 0.5
+threshold: 0.5  # Classification threshold (0.0-1.0), higher = more precision
 
-# =============================================================================
-# Performance Notes
-# =============================================================================
-# - E5-Small LoRA is fast and efficient
-# - Can run on CPU or GPU (GPU recommended for batch processing)
-# - Inference time: ~50ms per text on CPU, ~10ms on GPU
-# - Maximum sequence length: 512 tokens (handled automatically)
-# - Memory usage: ~400MB on GPU, ~200MB on CPU
-# - Supports batch processing through HuggingFace pipeline
+# Performance Notes:
+# - Inference: ~10ms per text (GPU), ~50ms (CPU)
+# - Memory: ~400MB (GPU), ~200MB (CPU)
+# - Max tokens: 512 (auto-truncated)
+# - Batch processing: Supported via HuggingFace pipeline
 
-# =============================================================================
-# Accuracy Benchmarks (from Microsoft Hackathon 2024 & RAID benchmark)
-# =============================================================================
-# Test Set           | Accuracy | Precision | Recall | F1-Score
-# -------------------|----------|-----------|--------|----------
-# RAID Test Set      | 93.9%    | 94.2%     | 93.6%  | 93.9%
-# GPT-4 Generated    | 99.3%    | 99.1%     | 99.5%  | 99.3%
-# GPT-3.5 Generated  | 95.8%    | 96.1%     | 95.5%  | 95.8%
-# Human-Written      | 92.4%    | 92.0%     | 92.8%  | 92.4%
-#
-# Robustness:
-# - With adversarial attacks: 85.7% accuracy
-# - Character substitution attack: 90.1% accuracy
-# - Homoglyph attack: 88.3% accuracy
-# - Zero-width character insertion: 87.5% accuracy
+# Accuracy (RAID benchmark):
+# - Overall: 93.9% | GPT-4: 99.3% | With attacks: 85.7%
+# See docs/CONFIGURATION.md for complete benchmarks
 
-# =============================================================================
-# Model Details
-# =============================================================================
-# Base Model: intfloat/e5-small (33M parameters)
-# Fine-tuning: LoRA (Low-Rank Adaptation)
-#   - LoRA rank: 8
-#   - LoRA alpha: 16
-#   - Target modules: query, value projection layers
-# Training Data: 218K samples from RAID benchmark
-#   - 98K human-written texts
-#   - 138K AI-generated texts (GPT-3.5, GPT-4, Claude, etc.)
-# Training: 3 epochs, ~2 hours on A100 GPU
-# Published: November 8, 2024 on HuggingFace Hub
-
-# =============================================================================
-# Use Cases
-# =============================================================================
-# ✅ Recommended for:
-# - General-purpose AI text detection
-# - High accuracy requirements (93.9% on RAID)
-# - Batch processing of documents
-# - Academic integrity checking
-# - Content moderation
-# - Fast inference on CPU or GPU
-#
-# ⚠️ Limitations:
-# - Supervised method: May not generalize to new AI models unseen during training
-# - Text length: Best performance on texts >50 tokens
-# - Training bias: Optimized for RAID benchmark distribution
-
-# =============================================================================
-# Citation
-# =============================================================================
-# Model: MayZhou/e5-small-lora-ai-generated-detector
-# Source: https://huggingface.co/MayZhou/e5-small-lora-ai-generated-detector
-# Benchmark: RAID (Robust AI-generated text Detection)
-# Competition: Microsoft Hackathon 2024
-# Rank: #1 on RAID leaderboard (as of November 8, 2024)
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="e5-small")
+# result = pipe("Your text here")

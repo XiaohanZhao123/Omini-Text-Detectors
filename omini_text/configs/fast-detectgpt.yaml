@@ -1,172 +1,39 @@
-# Fast-DetectGPT AI Text Detector Configuration
+# Fast-DetectGPT Detector (95%+ AUROC, 340× faster than DetectGPT)
 # Zero-shot detection using conditional probability curvature
-# ⚠️ GPU REQUIRED - This detector cannot run on CPU
+# ⚠️ GPU REQUIRED - Cannot run on CPU
+# See docs/CONFIGURATION.md for detailed parameter descriptions
 
-# Model selection
 model: fast-detectgpt
 
-# =============================================================================
-# Model Configuration
-# =============================================================================
-# Fast-DetectGPT uses TWO models:
-# 1. Sampling model: Generates probability distributions
-# 2. Scoring model: Scores text likelihood
-# The models can be the same or different (if tokenizers are compatible)
+# Model Configuration (two models: sampling + scoring)
+sampling_model_name: gpt-neo-2.7B  # See docs for available models
+scoring_model_name: gpt-neo-2.7B   # Can be same or different (if tokenizers compatible)
 
-# Sampling model - used for generating perturbations
-# See "Model Name Reference" section below for available options
-sampling_model_name: gpt-neo-2.7B
+# Recommended Combinations (pre-calibrated for accuracy):
+# - gpt-neo-2.7B + gpt-neo-2.7B: 82% accuracy, fastest (6-8GB VRAM)
+# - gpt-j-6B + gpt-neo-2.7B: 81% accuracy, good balance (12-16GB VRAM)
+# - falcon-7b + falcon-7b-instruct: 89% accuracy, best (14-18GB VRAM)
 
-# Scoring model - used for scoring likelihood
-scoring_model_name: gpt-neo-2.7B
-
-# =============================================================================
-# Recommended Model Combinations (Pre-calibrated)
-# =============================================================================
-# These combinations have pre-calibrated probability distributions for accurate results
-#
-# Combination                      | Accuracy | Description
-# ---------------------------------|----------|------------------------------------
-# gpt-neo-2.7B_gpt-neo-2.7B        | 82.22%   | Fastest - single model (default)
-# gpt-j-6B_gpt-neo-2.7B            | 81.22%   | Good balance of accuracy and speed
-# falcon-7b_falcon-7b-instruct     | 89.38%   | Best accuracy - requires more GPU memory
-#
-# Other combinations will work but may have reduced accuracy.
-# The detector will warn you if using a non-recommended combination.
-
-# =============================================================================
-# Model Name Reference (Short name -> HuggingFace full name)
-# =============================================================================
-# Use short names in config, they map to full HuggingFace model names:
-#
-# Short Name              | HuggingFace Full Name
-# ------------------------|----------------------------------------
-# gpt2                    | gpt2
-# gpt2-xl                 | gpt2-xl
-# gpt-neo-2.7B            | EleutherAI/gpt-neo-2.7B
-# gpt-j-6B                | EleutherAI/gpt-j-6B
-# gpt-neox-20b            | EleutherAI/gpt-neox-20b
-# opt-2.7b                | facebook/opt-2.7b
-# opt-13b                 | facebook/opt-13b
-# llama-13b               | huggyllama/llama-13b
-# llama2-13b              | TheBloke/Llama-2-13B-fp16
-# bloom-7b1               | bigscience/bloom-7b1
-# falcon-7b               | tiiuae/falcon-7b
-# falcon-7b-instruct      | tiiuae/falcon-7b-instruct
-#
-# Models will be automatically downloaded from HuggingFace on first use
-
-# =============================================================================
 # Device Configuration
-# =============================================================================
-# GPU is REQUIRED - Fast-DetectGPT cannot run on CPU
-#
-# Device options:
-# - "0,1,2,3"  : Multi-GPU (distributes model across specified GPUs) [RECOMMENDED]
-# - "0"        : Single GPU (cuda:0)
-# - "1"        : Single GPU (cuda:1)
-# - "auto"     : Automatically use all available GPUs
-# - "cpu"      : NOT SUPPORTED - will raise an error
-#
-# Multi-GPU is recommended for large models (gpt-j-6B, falcon-7b, etc.)
-device: "0,1,2,3"
+device: "0,1,2,3"  # Multi-GPU recommended. Options: "0" (single), "0,1,2,3" (multi), "auto"
 
-# =============================================================================
 # Cache Configuration
-# =============================================================================
-# Directory for caching HuggingFace models
-# Relative paths are resolved from the repository root
-# Absolute paths are also supported
-cache_dir: "../cache"
+cache_dir: "../cache"  # HuggingFace model cache directory (relative or absolute)
 
-# =============================================================================
 # Detection Configuration
-# =============================================================================
-# Classification threshold
-# Range: 0.0-1.0
-# Texts with score >= threshold are classified as AI-generated (label=1)
-# Trade-off: Higher threshold = more precision, lower recall
-threshold: 0.5
+threshold: 0.5  # Classification threshold (0.0-1.0)
 
-# =============================================================================
-# GPU Memory Requirements
-# =============================================================================
-# Approximate GPU memory needed for different models:
-#
-# Model                      | Single GPU | Multi-GPU (4x)
-# ---------------------------|------------|---------------
-# gpt-neo-2.7B (one model)   | 6-8 GB     | 2-3 GB per GPU
-# gpt-neo-2.7B (two models)  | 12-16 GB   | 4-6 GB per GPU
-# gpt-j-6B                   | 12-16 GB   | 4-6 GB per GPU
-# falcon-7b                  | 14-18 GB   | 5-7 GB per GPU
-# gpt-neox-20b               | 40+ GB     | 10+ GB per GPU
-#
-# Notes:
-# - Using the same model for both sampling and scoring uses less memory
-# - Multi-GPU setup (device: "0,1,2,3") distributes memory across GPUs
-# - Float16 precision is used automatically for compatible models
+# Performance Notes:
+# - Speed: 1-7s per text (model-dependent)
+# - GPU: Required, multi-GPU recommended for large models
+# - Min text length: 100 tokens (500+ tokens for best reliability)
 
-# =============================================================================
-# Performance Characteristics
-# =============================================================================
-# Fast-DetectGPT achieves 340x speedup over original DetectGPT while maintaining accuracy
-#
-# Speed comparison (approximate inference time per text):
-# - gpt-neo-2.7B: 1-3 seconds per text
-# - gpt-j-6B: 2-5 seconds per text
-# - falcon-7b: 3-7 seconds per text
-#
-# Longer texts (>500 tokens) take proportionally longer but provide more reliable results
+# Available Models:
+# gpt-neo-2.7B, gpt-j-6B, gpt-neox-20b, falcon-7b, falcon-7b-instruct,
+# opt-2.7b, opt-13b, llama-13b, llama2-13b, bloom-7b1
+# See docs/CONFIGURATION.md for full list and compatibility
 
-# =============================================================================
-# Accuracy Benchmarks (from ICLR 2024 paper)
-# =============================================================================
-# Dataset: XSum (news articles)
-#
-# Model Combination                 | AUROC  | TPR@5%FPR
-# ----------------------------------|--------|----------
-# gpt-neo-2.7B_gpt-neo-2.7B         | 95.0%  | 76.8%
-# gpt-j-6B_gpt-neo-2.7B             | 96.5%  | 84.1%
-# falcon-7b_falcon-7b-instruct      | 98.7%  | 94.3%
-#
-# White-box setting (using actual source model):
-# - Writing domain: 99.0%+ AUROC
-# - Black-box setting (using surrogate models): ~85-95% AUROC
-#
-# Note: Accuracy varies by text length and domain
-# - Minimum recommended text length: 100 tokens
-# - Longer texts (500+ tokens) provide more reliable detection
-
-# =============================================================================
-# Tokenizer Compatibility
-# =============================================================================
-# When using different sampling and scoring models, their tokenizers must be compatible
-#
-# Compatible combinations:
-# ✅ gpt-j-6B + gpt-neo-2.7B (both use GPT-2 tokenizer)
-# ✅ gpt-neo-2.7B + gpt-neo-2.7B (same tokenizer)
-# ✅ falcon-7b + falcon-7b-instruct (both use Falcon tokenizer)
-# ✅ Any model + itself (always compatible)
-#
-# Incompatible combinations (will raise error):
-# ❌ gpt-neo-2.7B + falcon-7b (different tokenizers)
-# ❌ opt-2.7b + gpt-j-6B (different tokenizers)
-#
-# The detector will automatically check compatibility and raise a helpful error if incompatible
-
-# =============================================================================
-# Usage Example
-# =============================================================================
+# Usage:
 # from omini_text import get_pipeline_from_cfg
-#
-# # Load detector with this config
 # pipe = get_pipeline_from_cfg("configs/fast-detectgpt.yaml")
-#
-# # Detect single text
 # result = pipe("Your text here")
-# print(f"AI probability: {result['score']:.2%}")
-#
-# # Batch detection
-# results = pipe(["Text 1", "Text 2", "Text 3"])
-# for r in results:
-#     print(f"Label: {r['label']}, Score: {r['score']:.2%}")

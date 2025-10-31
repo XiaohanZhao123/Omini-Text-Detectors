@@ -1,98 +1,43 @@
-# Glimpse AI Text Detector Configuration
-# Zero-shot detection using probability distribution estimation with proprietary models
+# Glimpse Detector (85-89% AUROC on proprietary models)
+# Zero-shot detection for GPT-4, Claude, Gemini via API
+# Runs on CPU, incurs API costs (~$0.001 per text)
+# See docs/CONFIGURATION.md for detailed parameter descriptions
 
-# Model selection
 model: glimpse
 
-# =============================================================================
 # Scoring Model Configuration
-# =============================================================================
-# Choose the proprietary model to use for detection
-# Options: davinci-002, babbage-002, gpt-35-turbo-1106
-# Trade-off: babbage-002 (cheapest) vs davinci-002 (better accuracy) vs gpt-35-turbo-1106 (best)
-scoring_model_name: davinci-002
+scoring_model_name: davinci-002  # Options: davinci-002, babbage-002, gpt-35-turbo-1106
 
-# =============================================================================
 # API Configuration
-# =============================================================================
-# API endpoint URL
-# For OpenAI: https://api.openai.com/v1
-# For Azure OpenAI: https://your-resource.openai.azure.com/
-api_base: https://api.openai.com/v1
+api_base: https://api.openai.com/v1  # OpenAI or Azure endpoint
+api_version: 2023-09-15-preview      # For Azure only
 
-# API version (for Azure OpenAI only)
-api_version: 2023-09-15-preview
+# ⚠️ API Key: Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in .env file
+# Do NOT put API keys in this config file
 
-# NOTE: API keys are loaded from .env file, NOT from this config
-# Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in your .env file
+# Distribution Estimation
+estimator: geometric  # Options: geometric (recommended), zipfian, mlp
+rank_size: 1000      # Tokens to estimate (100-5000), higher = better accuracy + cost
+top_k: 5             # Top tokens from API (5-10)
 
-# =============================================================================
-# Distribution Estimation Configuration
-# =============================================================================
-# Distribution estimator type
-# Options: geometric, zipfian, mlp
-# Recommendation: geometric (best balance of accuracy and simplicity)
-estimator: geometric
-
-# Number of tokens to estimate in probability distribution
-# Range: 100-5000
-# Trade-off: Higher values = better accuracy but higher API cost
-# Recommendation: 1000 for good balance
-rank_size: 1000
-
-# Number of top tokens to retrieve from API
-# Range: 5-10
-# Note: OpenAI Completion API typically supports up to 10
-top_k: 5
-
-# =============================================================================
 # Prompt Configuration
-# =============================================================================
-# Prompt variant to use for API calls
-# Options: prompt0, prompt1, prompt2, prompt3, prompt4
-# Recommendation: prompt3 (best performance in paper)
-# - prompt0: Empty prompt
-# - prompt3: System + Assistant role prompts (recommended)
-# - prompt4: Alternative Assistant + User role prompts
-prompt: prompt3
+prompt: prompt3  # Options: prompt0, prompt3 (recommended), prompt4
 
-# =============================================================================
 # Detection Configuration
-# =============================================================================
-# Classification threshold
-# Range: 0.0-1.0
-# Texts with score >= threshold are classified as AI-generated (label=1)
-# Trade-off: Higher threshold = more precision, lower recall
-threshold: 0.5
+threshold: 0.5  # Classification threshold (0.0-1.0)
 
-# =============================================================================
-# Optional: Device Configuration
-# =============================================================================
-# Glimpse runs on CPU and doesn't require GPU
-# No device configuration needed
+# Performance Notes:
+# - Speed: Depends on API latency (~1-3s per text)
+# - Cost: ~$0.0004-0.002 per text (model-dependent)
+# - Device: CPU only (no GPU needed)
+# - Min text length: 50 tokens
 
-# =============================================================================
-# Performance Notes
-# =============================================================================
-# - Glimpse is designed for API-based models and runs efficiently on CPU
-# - API costs depend on text length and rank_size parameter
-# - Longer texts generally provide more reliable detection
-# - Minimum recommended text length: 50 tokens
-# - Each detection requires 1 API call to the scoring model
+# Cost Estimates (check OpenAI pricing):
+# - babbage-002: ~$0.0004/1K tokens (cheapest)
+# - davinci-002: ~$0.002/1K tokens (medium)
+# - gpt-35-turbo: ~$0.001/1K tokens (best accuracy)
 
-# =============================================================================
-# Accuracy Benchmarks (from ICLR 2025 paper)
-# =============================================================================
-# Model                    | English AUROC | Multi-language AUROC
-# -------------------------|---------------|---------------------
-# babbage-002 + geometric  | 82.15%        | Varies by language
-# davinci-002 + geometric  | 84.60%        | Better than babbage
-# gpt-35-turbo + geometric | 88.94%        | Best performance
-
-# =============================================================================
-# Cost Estimates (Approximate, check OpenAI pricing)
-# =============================================================================
-# babbage-002: Lowest cost (~$0.0004/1K tokens)
-# davinci-002: Medium cost (~$0.002/1K tokens)
-# gpt-35-turbo: Higher cost (~$0.0005-0.001/1K tokens for completion API)
-# Note: Costs are for legacy Completion API models
+# Usage:
+# from omini_text import get_pipeline_from_cfg
+# pipe = get_pipeline_from_cfg("configs/glimpse.yaml")
+# result = pipe("Your text here")
