@@ -96,7 +96,7 @@ result = pipe("Text to analyze")
 
 ### Zero-Shot (No Training Needed)
 
-**Fast-DetectGPT** [[Paper](https://arxiv.org/abs/2310.05130] [[Code](https://github.com/baoguangsheng/fast-detect-gpt)]
+**Fast-DetectGPT** [[Paper](https://arxiv.org/abs/2310.05130)] [[Code](https://github.com/baoguangsheng/fast-detect-gpt)]
 - ICLR 2024, 340× faster than DetectGPT
 - Uses probability curvature analysis
 - ⚠️ Requires GPU, 6-16GB VRAM
