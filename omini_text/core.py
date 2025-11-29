@@ -3,12 +3,12 @@ Core pipeline functions for unified AI text detection interface.
 """
 
 import os
-import yaml
 from pathlib import Path
-from typing import Union, List, Dict
+from typing import Dict, List, Union
 
+import yaml
 
-def pipeline(task: str, model: str, **kwargs) -> 'DetectorPipeline':
+def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
     """
     Create a detector pipeline with sensible defaults.
 
@@ -26,22 +26,27 @@ def pipeline(task: str, model: str, **kwargs) -> 'DetectorPipeline':
         results = pipe(["Text 1", "Text 2"])
     """
     if task != "ai-text-detection":
-        raise ValueError(f"Task '{task}' not supported. Only 'ai-text-detection' is available.")
+        raise ValueError(
+            f"Task '{task}' not supported. Only 'ai-text-detection' is available."
+        )
 
     # Map model names to detector classes
     model_map = {
         "glimpse": "omini_text.detectors.glimpse_detector.GlimpseDetector",
         "e5-small": "omini_text.detectors.e5_detector.E5Detector",
         "fast-detectgpt": "omini_text.detectors.fast_detectgpt_detector.FastDetectGPTDetector",
-        "desklib": "omini_text.detectors.desklib_detector.DesklibDetector"
+        "desklib": "omini_text.detectors.desklib_detector.DesklibDetector",
+        "binoculars": "omini_text.detectors.binoculars_detector.BinocularsDetector",
     }
 
     if model not in model_map:
-        raise ValueError(f"Model '{model}' not supported. Choose from: {list(model_map.keys())}")
+        raise ValueError(
+            f"Model '{model}' not supported. Choose from: {list(model_map.keys())}"
+        )
 
     # Load default config for this model
     config_path = Path(__file__).parent / "configs" / f"{model}.yaml"
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
     # Override with user-provided kwargs
@@ -49,9 +54,10 @@ def pipeline(task: str, model: str, **kwargs) -> 'DetectorPipeline':
 
     # Instantiate the detector
     detector_class_path = model_map[model]
-    module_path, class_name = detector_class_path.rsplit('.', 1)
+    module_path, class_name = detector_class_path.rsplit(".", 1)
 
     import importlib
+
     module = importlib.import_module(module_path)
     detector_class = getattr(module, class_name)
     detector = detector_class(config)
@@ -59,7 +65,7 @@ def pipeline(task: str, model: str, **kwargs) -> 'DetectorPipeline':
     return DetectorPipeline(detector)
 
 
-def get_pipeline_from_cfg(cfg_path: str) -> 'DetectorPipeline':
+def get_pipeline_from_cfg(cfg_path: str) -> "DetectorPipeline":
     """
     Create a detector pipeline from a config file.
 
@@ -79,20 +85,24 @@ def get_pipeline_from_cfg(cfg_path: str) -> 'DetectorPipeline':
         raise FileNotFoundError(f"Config file not found: {cfg_path}")
 
     # Load config file
-    with open(cfg_path, 'r') as f:
-        if cfg_path.suffix in ['.yaml', '.yml']:
+    with open(cfg_path, "r") as f:
+        if cfg_path.suffix in [".yaml", ".yml"]:
             config = yaml.safe_load(f)
-        elif cfg_path.suffix == '.json':
+        elif cfg_path.suffix == ".json":
             import json
+
             config = json.load(f)
         else:
-            raise ValueError(f"Unsupported config format: {cfg_path.suffix}. Use .yaml, .yml, or .json")
+            raise ValueError(
+                f"Unsupported config format: {cfg_path.suffix}. Use .yaml, .yml, or .json"
+            )
 
-    model = config.get('model')
+    model = config.get("model")
     if not model:
         raise ValueError("Config file must specify 'model' field")
 
     # Remove 'model' from config to avoid duplicate parameter
+    config_without_model = {k: v for k, v in config.items() if k != "model"}
     config_without_model = {k: v for k, v in config.items() if k != 'model'}
 
     # Use pipeline function with config as kwargs

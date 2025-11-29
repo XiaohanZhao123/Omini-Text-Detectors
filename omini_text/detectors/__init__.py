@@ -44,14 +44,16 @@ class BaseDetector(ABC):
 
 
 # Import detector implementations
-from omini_text.detectors.e5_small_detector import E5SmallDetector
+from omini_text.detectors.binoculars_detector import BinocularsDetector
 from omini_text.detectors.desklib_detector import DesklibDetector
+from omini_text.detectors.e5_small_detector import E5SmallDetector
 from omini_text.detectors.glimpse_detector import GlimpseDetector
 
-
 __all__ = [
-    'BaseDetector',
-    'E5SmallDetector',
-    'DesklibDetector',
-    'GlimpseDetector',
+    "BaseDetector",
+    "BaseDetector",
+    "E5SmallDetector",
+    "DesklibDetector",
+    "GlimpseDetector",
+    "BinocularsDetector",
 ]

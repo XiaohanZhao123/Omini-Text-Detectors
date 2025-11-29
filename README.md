@@ -1,6 +1,7 @@
 # Omini-Text: Unified AI Text Detection
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This project is part of the Omini-Detect, providing a unified interface for multiple AI text detection methods.
 
 
@@ -48,6 +49,7 @@ cp .env.example .env
 - zero-shot (no training needed)
   - fast-detectgpt
   - glimpse
+  - binoculars
 ---
 
 ## Usage Examples
@@ -106,6 +108,11 @@ result = pipe("Text to analyze")
 - API-based, runs on CPU
 - ⚠️ Incurs API costs (~$0.001/text)
 
+**Binoculars** [[Paper](https://arxiv.org/abs/2401.12070)] [[Code](https://github.com/ahans30/Binoculars)]
+- ICML 2024, perplexity ratio between two LLMs
+- Uses Falcon-7B observer + performer pair
+- ⚠️ Requires GPU (~14GB VRAM)
+
 ### Supervised (Trained on AI Text)
 
 **e5-small LoRA** [[Model](https://huggingface.co/MayZhou/e5-small-lora-ai-generated-detector)]
@@ -138,6 +145,7 @@ Omini-Text/
 ├── baseline/             # Original baseline implementations
 │   ├── fast-detect-gpt/  # Fast-DetectGPT source
 │   ├── glimpse/          # Glimpse source
+│   ├── binoculars/       # Binoculars source
 │   ├── e5_small/         # E5-small training & evaluation
 │   └── desklib/          # Desklib source
 ├── examples/             # Usage examples
@@ -164,6 +172,13 @@ If you use this repository, please cite the original papers:
   author={Bao, Guangsheng and Zhao, Yanbin and Teng, Zhiyang and Zhang, Yue},
   booktitle={ICLR},
   year={2025}
+}
+
+@inproceedings{binoculars2024,
+  title={Spotting LLMs With Binoculars: Zero-Shot Detection of Machine-Generated Text},
+  author={Hans, Abhimanyu and Schwarzschild, Avi and Ramber, Valeriia and Pirber, Tonmoy and Goldblum, Micah and Goldstein, Tom},
+  booktitle={ICML},
+  year={2024}
 }
 ```
 

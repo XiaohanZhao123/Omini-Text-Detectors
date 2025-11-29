@@ -1,0 +1,43 @@
+# Binoculars Detector (ICML 2024, Zero-shot detection)
+# Uses perplexity ratio between observer and performer models
+# Paper: https://arxiv.org/abs/2401.12070
+# See docs/CONFIGURATION.md for detailed parameter descriptions
+
+model: binoculars
+
+# Model Configuration (two models: observer + performer)
+observer_name: tiiuae/falcon-7b       # Base model for computing cross-perplexity
+performer_name: tiiuae/falcon-7b-instruct  # Instruction-tuned variant
+
+# Recommended Model Pairs (must share tokenizer):
+# - falcon-7b + falcon-7b-instruct: Default, best calibrated (14GB VRAM total)
+# - Llama-2-7b + Llama-2-7b-chat: Alternative, requires HF token (14GB VRAM)
+
+# Detection Mode
+mode: low-fpr  # Options: "low-fpr" (0.01% FPR), "accuracy" (balanced F1)
+
+# Thresholds (pre-calibrated on Falcon-7B):
+# - low-fpr: 0.8536 (optimized for very low false positive rate)
+# - accuracy: 0.9015 (optimized for F1-score)
+# threshold: 0.85  # Uncomment to override mode-based threshold
+
+# Model Settings
+max_token_observed: 512  # Maximum tokens to analyze (default: 512)
+use_bfloat16: true       # Use bfloat16 precision for efficiency
+
+# Performance Notes:
+# - Speed: 0.5-2s per text (depends on length and GPU)
+# - GPU: Required, ~14GB VRAM for both models
+# - Can use 2 GPUs (observer on cuda:0, performer on cuda:1)
+# - Min text length: 50 tokens recommended
+
+# How it works:
+# 1. Compute perplexity of text using performer model
+# 2. Compute cross-perplexity using observer model probabilities
+# 3. Binoculars score = perplexity / cross-perplexity
+# 4. Score < threshold → AI-generated, Score >= threshold → Human
+
+# Usage:
+# from omini_text import get_pipeline_from_cfg
+# pipe = get_pipeline_from_cfg("omini_text/configs/binoculars.yaml")
+# result = pipe("Your text here")

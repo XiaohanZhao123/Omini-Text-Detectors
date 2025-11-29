@@ -6,38 +6,22 @@
 model: glimpse
 
 # Scoring Model Configuration
-scoring_model_name: davinci-002  # Options: davinci-002, babbage-002, gpt-35-turbo-1106
+scoring_model_name: davinci-002 # Options: davinci-002, babbage-002, gpt-35-turbo-1106
 
 # API Configuration
-api_base: https://api.openai.com/v1  # OpenAI or Azure endpoint
-api_version: 2023-09-15-preview      # For Azure only
+api_base: https://api.openai.com/v1 # OpenAI or Azure endpoint
+api_version: 2023-09-15-preview # For Azure only
 
 # ⚠️ API Key: Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in .env file
 # Do NOT put API keys in this config file
 
 # Distribution Estimation
-estimator: geometric  # Options: geometric (recommended), zipfian, mlp
-rank_size: 1000      # Tokens to estimate (100-5000), higher = better accuracy + cost
-top_k: 5             # Top tokens from API (5-10)
+estimator: geometric # Options: geometric (recommended), zipfian, mlp
+rank_size: 1000 # Tokens to estimate (100-5000), higher = better accuracy + cost
+top_k: 5 # Top tokens from API (5-10)
 
 # Prompt Configuration
-prompt: prompt3  # Options: prompt0, prompt3 (recommended), prompt4
+prompt: prompt3 # Options: prompt0, prompt3 (recommended), prompt4
 
 # Detection Configuration
-threshold: 0.5  # Classification threshold (0.0-1.0)
-
-# Performance Notes:
-# - Speed: Depends on API latency (~1-3s per text)
-# - Cost: ~$0.0004-0.002 per text (model-dependent)
-# - Device: CPU only (no GPU needed)
-# - Min text length: 50 tokens
-
-# Cost Estimates (check OpenAI pricing):
-# - babbage-002: ~$0.0004/1K tokens (cheapest)
-# - davinci-002: ~$0.002/1K tokens (medium)
-# - gpt-35-turbo: ~$0.001/1K tokens (best accuracy)
-
-# Usage:
-# from omini_text import get_pipeline_from_cfg
-# pipe = get_pipeline_from_cfg("configs/glimpse.yaml")
-# result = pipe("Your text here")
+threshold: 0.5 # Classification threshold (0.0-1.0)
