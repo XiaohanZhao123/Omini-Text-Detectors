@@ -48,12 +48,13 @@ from omini_text.detectors.binoculars_detector import BinocularsDetector
 from omini_text.detectors.desklib_detector import DesklibDetector
 from omini_text.detectors.e5_small_detector import E5SmallDetector
 from omini_text.detectors.glimpse_detector import GlimpseDetector
+from omini_text.detectors.radar_detector import RADARDetector
 
 __all__ = [
-    "BaseDetector",
     "BaseDetector",
     "E5SmallDetector",
     "DesklibDetector",
     "GlimpseDetector",
     "BinocularsDetector",
+    "RADARDetector",
 ]

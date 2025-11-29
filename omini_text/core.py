@@ -8,6 +8,7 @@ from typing import Dict, List, Union
 
 import yaml
 
+
 def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
     """
     Create a detector pipeline with sensible defaults.
@@ -33,10 +34,11 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
     # Map model names to detector classes
     model_map = {
         "glimpse": "omini_text.detectors.glimpse_detector.GlimpseDetector",
-        "e5-small": "omini_text.detectors.e5_detector.E5Detector",
+        "e5-small": "omini_text.detectors.e5_small_detector.E5SmallDetector",
         "fast-detectgpt": "omini_text.detectors.fast_detectgpt_detector.FastDetectGPTDetector",
         "desklib": "omini_text.detectors.desklib_detector.DesklibDetector",
         "binoculars": "omini_text.detectors.binoculars_detector.BinocularsDetector",
+        "radar": "omini_text.detectors.radar_detector.RADARDetector",
     }
 
     if model not in model_map:
@@ -102,6 +104,7 @@ def get_pipeline_from_cfg(cfg_path: str) -> "DetectorPipeline":
         raise ValueError("Config file must specify 'model' field")
 
     # Remove 'model' from config to avoid duplicate parameter
+    config_without_model = {k: v for k, v in config.items() if k != "model"}
     config_without_model = {k: v for k, v in config.items() if k != "model"}
     config_without_model = {k: v for k, v in config.items() if k != 'model'}
 

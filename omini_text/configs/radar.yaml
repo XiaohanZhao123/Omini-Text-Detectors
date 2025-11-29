@@ -1,0 +1,39 @@
+# RADAR Detector (NeurIPS 2023, Supervised detection)
+# Robust AI-Text Detector via Adversarial Learning
+# Paper: https://arxiv.org/abs/2307.03838
+# See docs/CONFIGURATION.md for detailed parameter descriptions
+
+model: radar
+
+# Model Configuration
+model_path: TrustSafeAI/RADAR-Vicuna-7B  # HuggingFace model path
+
+# Device Settings
+device: auto  # Options: "auto", "cuda", "cpu"
+
+# Detection Parameters
+max_length: 512   # Maximum sequence length for tokenization
+threshold: 0.5    # Classification threshold (0.0-1.0)
+
+# Model Details:
+# - Architecture: RoBERTa-large for sequence classification
+# - Training: Adversarial learning between detector and paraphraser
+# - Training Data: OpenWebText (human) + Vicuna-7B completions (AI)
+# - License: Non-commercial (inherited from Vicuna-7B-v1.1)
+
+# Performance Notes:
+# - Speed: Fast inference (~0.1s per text on GPU)
+# - GPU: ~1.5GB VRAM (RoBERTa-large)
+# - CPU: Usable but slower
+# - Robust against paraphrasing attacks
+
+# How it works:
+# 1. Tokenize input text (max 512 tokens)
+# 2. Run through RoBERTa-large classifier
+# 3. Apply softmax to get AI probability
+# 4. Score >= threshold → AI-generated, Score < threshold → Human
+
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="radar")
+# result = pipe("Your text here")
