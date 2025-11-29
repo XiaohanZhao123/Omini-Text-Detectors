@@ -1,11 +1,11 @@
 # Omini-Text: Unified AI Text Detection
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This project is part of the Omini-Detect, providing a unified interface for multiple AI text detection methods.
+A unified interface for 6 state-of-the-art AI text detection methods, spanning zero-shot and supervised approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
 
-
-## Quick Start (3 Lines)
+## Quick Start
 
 ```python
 from omini_text import pipeline
@@ -17,67 +17,101 @@ print(result)
 # {'text': '...', 'label': 1, 'score': 0.87, 'metadata': {'num_tokens': 45}}
 ```
 
-**Result format:**
-- `label`: 0=human, 1=AI-generated
-- `score`: Probability (0.0-1.0)
-- `metadata`: Detection details
-
----
+**Output format:**
+- `label`: 0 = human, 1 = AI-generated
+- `score`: Probability (0.0–1.0)
+- `metadata`: Detection details (tokens, model info)
 
 ## Installation
 
 ```bash
-# Clone repository
 git clone https://github.com/your-org/Omini-Text.git
 cd Omini-Text
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Optional: Set API key for Glimpse detector
-cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
 ```
 
----
+For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 
-## Choose Your Detector
+## Available Detectors
 
-- training/finetuning based
-  - e5-small
-  - desklib
-- zero-shot (no training needed)
-  - fast-detectgpt
-  - glimpse
-  - binoculars
----
+| Detector | Type | Venue | Key Feature | Hardware |
+|----------|------|-------|-------------|----------|
+| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU |
+| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU |
+| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU |
+| [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) |
+| [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) |
+| [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API |
 
-## Usage Examples
+### Supervised Methods (trained on AI text)
 
-### Single Text Detection
+#### e5-small LoRA
+[[Model](https://huggingface.co/MayZhou/e5-small-lora-ai-generated-detector)]
+
+Microsoft Hackathon 2024 winner. Fine-tuned e5-small with LoRA achieving **93.9% accuracy** on RAID benchmark, with strong robustness against adversarial attacks (85.7%).
 
 ```python
-from omini_text import pipeline
-
 pipe = pipeline("ai-text-detection", model="e5-small")
-result = pipe("The quick brown fox jumps over the lazy dog.")
-
-print(f"Prediction: {'AI' if result['label'] == 1 else 'Human'}")
-print(f"Confidence: {result['score']:.2%}")
 ```
+
+#### RADAR
+[[Paper](https://arxiv.org/abs/2307.03838)] [[Code](https://github.com/TrustAIResearch/RADAR)]
+
+NeurIPS 2023. **R**obust **A**I-Text **D**etector via **A**dversarial Lea**R**ning. Uses RoBERTa-large trained with paraphrase-based adversarial learning for improved robustness against text modifications.
+
+```python
+pipe = pipeline("ai-text-detection", model="radar")
+```
+
+#### Desklib
+[[Model](https://huggingface.co/desklib/ai-text-detector-v1.01)]
+
+Simple transformer classifier with mean pooling. Good baseline for experiments and easy to fine-tune on custom data.
+
+```python
+pipe = pipeline("ai-text-detection", model="desklib")
+```
+
+### Zero-Shot Methods (no training needed)
+
+#### Fast-DetectGPT
+[[Paper](https://arxiv.org/abs/2310.05130)] [[Code](https://github.com/baoguangsheng/fast-detect-gpt)]
+
+ICLR 2024. Uses conditional probability curvature for detection. **340× faster** than original DetectGPT with better accuracy.
+
+```python
+pipe = pipeline("ai-text-detection", model="fast-detectgpt")
+```
+
+#### Binoculars
+[[Paper](https://arxiv.org/abs/2401.12070)] [[Code](https://github.com/ahans30/Binoculars)]
+
+ICML 2024. Analyzes perplexity ratio between observer (base) and performer (instruction-tuned) LLM pairs. Pre-calibrated thresholds for low FPR or balanced accuracy.
+
+```python
+pipe = pipeline("ai-text-detection", model="binoculars")
+```
+
+#### Glimpse
+[[Paper](https://arxiv.org/abs/2412.11506)] [[Code](https://github.com/baoguangsheng/glimpse)]
+
+ICLR 2025. Bridges white-box detection with proprietary LLMs (GPT-4, Claude, Gemini) via probability distribution estimation. Runs on CPU but incurs API costs (~$0.001/text).
+
+```python
+pipe = pipeline("ai-text-detection", model="glimpse")
+```
+
+## Usage Examples
 
 ### Batch Processing
 
 ```python
-texts = [
-    "First text to check...",
-    "Second text to check...",
-    "Third text to check..."
-]
-
+texts = ["First text...", "Second text...", "Third text..."]
 results = pipe(texts)
+
 for r in results:
-    print(f"{r['text'][:50]}: {r['score']:.2%}")
+    label = "AI" if r["label"] == 1 else "Human"
+    print(f"{r['text'][:40]}... → {label} ({r['score']:.1%})")
 ```
 
 ### Config-Based Detection
@@ -85,55 +119,11 @@ for r in results:
 ```python
 from omini_text import get_pipeline_from_cfg
 
-# Use custom config file
 pipe = get_pipeline_from_cfg("configs/my_config.yaml")
 result = pipe("Text to analyze")
 ```
 
-**More examples** → See [examples/](examples/) directory
-
----
-
-## Detectors Overview
-
-### Zero-Shot (No Training Needed)
-
-**Fast-DetectGPT** [[Paper](https://arxiv.org/abs/2310.05130)] [[Code](https://github.com/baoguangsheng/fast-detect-gpt)]
-- ICLR 2024, 340× faster than DetectGPT
-- Uses probability curvature analysis
-- ⚠️ Requires GPU, 6-16GB VRAM
-
-**Glimpse** [[Paper](https://arxiv.org/abs/2412.11506)] [[Code](https://github.com/baoguangsheng/glimpse)]
-- ICLR 2025, detects GPT-4/Claude/Gemini
-- API-based, runs on CPU
-- ⚠️ Incurs API costs (~$0.001/text)
-
-**Binoculars** [[Paper](https://arxiv.org/abs/2401.12070)] [[Code](https://github.com/ahans30/Binoculars)]
-- ICML 2024, perplexity ratio between two LLMs
-- Uses Falcon-7B observer + performer pair
-- ⚠️ Requires GPU (~14GB VRAM)
-
-### Supervised (Trained on AI Text)
-
-**e5-small LoRA** [[Model](https://huggingface.co/MayZhou/e5-small-lora-ai-generated-detector)]
-- Microsoft Hackathon 2024 winner
-- 93.9% accuracy on RAID benchmark
-- Robust against adversarial attacks (85.7%)
-
-**Desklib** [[Model](https://huggingface.co/desklib/ai-text-detector-v1.01)]
-- Simple transformer classifier
-- Easy to fine-tune on custom data
-- Good baseline for experiments
-
----
-
-## Documentation
-
-- **[Quickstart Guide](docs/QUICKSTART.md)** - 5-minute tutorial with prerequisites
-- **[Configuration Reference](docs/CONFIGURATION.md)** - Detailed parameter documentation
-- **[API Reference](docs/API_REFERENCE.md)** - Technical interface specification
-
----
+See [examples/](examples/) for more usage patterns.
 
 ## Project Structure
 
@@ -141,25 +131,40 @@ result = pipe("Text to analyze")
 Omini-Text/
 ├── omini_text/           # Core library
 │   ├── detectors/        # Detector implementations
-│   └── configs/          # Default configs (e5-small.yaml, fast-detectgpt.yaml, etc.)
-├── baseline/             # Original baseline implementations
-│   ├── fast-detect-gpt/  # Fast-DetectGPT source
-│   ├── glimpse/          # Glimpse source
-│   ├── binoculars/       # Binoculars source
-│   ├── e5_small/         # E5-small training & evaluation
-│   └── desklib/          # Desklib source
+│   └── configs/          # Default configs
+├── baseline/             # Original implementations
+│   ├── fast-detect-gpt/
+│   ├── glimpse/
+│   ├── binoculars/
+│   ├── radar/            # RADAR detector
+│   ├── e5_small/
+│   └── desklib/
 ├── examples/             # Usage examples
-├── docs/                 # Detailed documentation
-└── README.md             # This file
+├── docs/                 # Documentation
+│   ├── QUICKSTART.md     # 5-minute tutorial
+│   ├── DETECTOR_GUIDE.md # Choosing a detector
+│   ├── CONFIGURATION.md  # Parameter reference
+│   └── API_REFERENCE.md  # Technical specification
+└── cache/                # Model cache
 ```
 
----
+## Documentation
+
+- [Quickstart Guide](docs/QUICKSTART.md) – 5-minute tutorial
+- [Detector Guide](docs/DETECTOR_GUIDE.md) – Choosing the right detector
+- [Configuration Reference](docs/CONFIGURATION.md) – All parameters
+- [API Reference](docs/API_REFERENCE.md) – Technical specification
 
 ## Citation
 
-If you use this repository, please cite the original papers:
-
 ```bibtex
+@inproceedings{hu2023radar,
+  title={RADAR: Robust AI-Text Detection via Adversarial Learning},
+  author={Hu, Xiaomeng and Chen, Pin-Yu and Ho, Tsung-Yi},
+  booktitle={NeurIPS},
+  year={2023}
+}
+
 @inproceedings{fastdetectgpt2024,
   title={Fast-DetectGPT: Efficient Zero-Shot Detection of Machine-Generated Text},
   author={Bao, Guangsheng and Zhao, Yanbin and Teng, Zhiyang and Yang, Linyi and Zhang, Yue},
@@ -168,7 +173,7 @@ If you use this repository, please cite the original papers:
 }
 
 @inproceedings{glimpse2025,
-  title={Glimpse: A White-Box Approach for Black-Box LLM Detection},
+  title={Glimpse: Enabling White-Box Methods to Detect AI-Generated Texts from Black-Box LLMs},
   author={Bao, Guangsheng and Zhao, Yanbin and Teng, Zhiyang and Zhang, Yue},
   booktitle={ICLR},
   year={2025}
@@ -182,15 +187,6 @@ If you use this repository, please cite the original papers:
 }
 ```
 
-**E5-small LoRA**: [HuggingFace Model Card](https://huggingface.co/MayZhou/e5-small-lora-ai-generated-detector)
-**Desklib**: [HuggingFace Model Card](https://huggingface.co/desklib/ai-text-detector-v1.01)
-
----
-
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details
-
-## Acknowledgments
-
-Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project for multimodal AI content detection.
+MIT License – See [LICENSE](LICENSE) for details.
