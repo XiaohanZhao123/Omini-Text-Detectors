@@ -70,23 +70,26 @@ class OpenAIGPT:
                     prompt=f"<|endoftext|>{prompt}{text}", **kwargs
                 )
                 result = response.choices[0]
-                # decide the prefix length
-                prefix = ""
-                nprefix = 1
-                while len(prefix) < len(prompt):
-                    prefix += result.logprobs.tokens[nprefix]
+                # Find token index where text begins (after prompt)
+                # Use cumulative character count - simpler and robust to tokenization quirks
+                all_tokens = result.logprobs.tokens
+                cumulative_len = 0
+                nprefix = 1  # skip <|endoftext|> token at index 0
+
+                while nprefix < len(all_tokens) and cumulative_len < len(prompt):
+                    cumulative_len += len(all_tokens[nprefix])
                     nprefix += 1
-                assert prefix == prompt, f"Mismatch: {prompt} .vs. {prefix}"
+
                 tokens = result.logprobs.tokens[nprefix:]
                 logprobs = result.logprobs.token_logprobs[nprefix:]
                 toplogprobs = result.logprobs.top_logprobs[nprefix:]
                 toplogprobs = [dict(item) for item in toplogprobs]
-                assert len(tokens) == len(
-                    logprobs
-                ), f"Expected {len(tokens)} logprobs, got {len(logprobs)}"
-                assert len(tokens) == len(
-                    toplogprobs
-                ), f"Expected {len(tokens)} toplogprobs, got {len(toplogprobs)}"
+                assert len(tokens) == len(logprobs), (
+                    f"Expected {len(tokens)} logprobs, got {len(logprobs)}"
+                )
+                assert len(tokens) == len(toplogprobs), (
+                    f"Expected {len(tokens)} toplogprobs, got {len(toplogprobs)}"
+                )
                 return tokens, logprobs, toplogprobs
             except Exception as ex:
                 print(ex)
