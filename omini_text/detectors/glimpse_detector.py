@@ -15,6 +15,7 @@ from typing import Dict
 
 from dotenv import load_dotenv
 
+from baseline.glimpse.scripts.local_infer import Glimpse
 from omini_text.detectors import BaseDetector
 
 
