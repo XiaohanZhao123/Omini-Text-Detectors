@@ -4,6 +4,7 @@ Runs specified detectors on specified datasets and outputs JSONL results.
 """
 
 import argparse
+import csv
 import json
 import sys
 import time
