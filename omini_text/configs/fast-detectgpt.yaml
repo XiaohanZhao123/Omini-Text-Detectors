@@ -6,8 +6,8 @@
 model: fast-detectgpt
 
 # Model Configuration (two models: sampling + scoring)
-sampling_model_name: gpt-neo-2.7B  # See docs for available models
-scoring_model_name: gpt-neo-2.7B   # Can be same or different (if tokenizers compatible)
+sampling_model_name: falcon-7b  # See docs for available models
+scoring_model_name: falcon-7b-instruct   # Can be same or different (if tokenizers compatible)
 
 # Recommended Combinations (pre-calibrated for accuracy):
 # - gpt-neo-2.7B + gpt-neo-2.7B: 82% accuracy, fastest (6-8GB VRAM)

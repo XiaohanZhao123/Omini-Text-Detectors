@@ -100,9 +100,10 @@ class RADARDetector(BaseDetector):
             # Apply softmax to get probabilities
             probs = F.softmax(logits, dim=-1)
 
-            # Get probability for AI-generated class (index 1)
-            # RADAR uses [human=0, AI=1] label convention
-            ai_prob = probs[0, 1].item()
+            # Get probability for AI-generated class (index 0)
+            # RADAR uses [AI=0, human=1] label convention per official repo:
+            # https://github.com/IBM/RADAR - output_probs = ...logits,-1)[:,0].exp()
+            ai_prob = probs[0, 0].item()
 
         # Determine label based on threshold
         label = 1 if ai_prob >= self.threshold else 0
