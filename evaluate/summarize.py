@@ -77,13 +77,57 @@ def get_length_bucket(num_tokens: int) -> str:
     return "unknown"
 
 
-def extract_metadata(result: Dict) -> Dict:
-    """Extract metadata fields from a result record."""
+def get_result_key(result: Dict) -> str:
+    """Get a unique key for a result based on source file and line index."""
+    ref = result.get("reference", {})
+    source_file = ref.get("source_file", "")
+    line_index = ref.get("line_index", 0)
+    return f"{source_file}:{line_index}"
+
+
+def build_token_count_index(all_results: Dict[str, List[Dict]]) -> Dict[str, int]:
+    """Build a lookup table of token counts from detectors that report them.
+
+    Some detectors (e.g., Binoculars, RADAR) don't report num_tokens in their
+    metadata. This function builds an index from detectors that do (e.g., E5-Small)
+    so we can cross-reference token counts for the same samples.
+    """
+    token_index = {}
+
+    for detector, results in all_results.items():
+        for r in results:
+            detection = r.get("detection", {})
+            detector_meta = detection.get("detector_metadata", {})
+            num_tokens = detector_meta.get("num_tokens", 0)
+
+            if num_tokens > 0:
+                key = get_result_key(r)
+                # Only set if not already set (first detector wins)
+                if key not in token_index:
+                    token_index[key] = num_tokens
+
+    return token_index
+
+
+def extract_metadata(
+    result: Dict, token_index: Optional[Dict[str, int]] = None
+) -> Dict:
+    """Extract metadata fields from a result record.
+
+    Args:
+        result: Single result record
+        token_index: Optional lookup table for token counts from other detectors
+    """
     metadata = result.get("metadata", {})
     detection = result.get("detection", {})
     detector_meta = detection.get("detector_metadata", {})
 
     num_tokens = detector_meta.get("num_tokens", 0)
+
+    # If this detector doesn't have num_tokens, try to get it from the index
+    if num_tokens == 0 and token_index:
+        key = get_result_key(result)
+        num_tokens = token_index.get(key, 0)
 
     return {
         "ai_model": metadata.get("ai_model"),
@@ -247,11 +291,13 @@ def compute_score_distribution(results: List[Dict], n_bins: int = 20) -> Dict:
     }
 
 
-def group_results_by(results: List[Dict], key: str) -> Dict[str, List[Dict]]:
+def group_results_by(
+    results: List[Dict], key: str, token_index: Optional[Dict[str, int]] = None
+) -> Dict[str, List[Dict]]:
     """Group results by a metadata key."""
     grouped = defaultdict(list)
     for r in results:
-        meta = extract_metadata(r)
+        meta = extract_metadata(r, token_index)
         value = meta.get(key)
         if value is not None:
             grouped[str(value)].append(r)
@@ -259,10 +305,12 @@ def group_results_by(results: List[Dict], key: str) -> Dict[str, List[Dict]]:
 
 
 def compute_breakdown_metrics(
-    results: List[Dict], breakdown_key: str
+    results: List[Dict],
+    breakdown_key: str,
+    token_index: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Dict]:
     """Compute metrics for each group in a breakdown."""
-    grouped = group_results_by(results, breakdown_key)
+    grouped = group_results_by(results, breakdown_key, token_index)
     breakdown_metrics = {}
     for group_value, group_results in grouped.items():
         breakdown_metrics[group_value] = compute_metrics(group_results)
@@ -1230,20 +1278,32 @@ def main():
         dataset_by_task = {}
         dataset_by_length = {}
 
+        # First pass: load all results
         for jsonl_path in sorted(dataset_dir.glob("*.jsonl")):
             detector = jsonl_path.stem
             results = load_results(jsonl_path)
             dataset_results[detector] = results
 
+        # Build token count index from all detectors (for cross-referencing)
+        token_index = build_token_count_index(dataset_results)
+        if token_index:
+            print(f"  Built token index with {len(token_index)} entries")
+
+        # Second pass: compute metrics using the token index
+        for detector, results in dataset_results.items():
             # Overall metrics
             metrics = compute_metrics(results)
             all_metrics[dataset][detector] = metrics
 
-            # Breakdown metrics
-            dataset_by_model[detector] = compute_breakdown_metrics(results, "ai_model")
-            dataset_by_task[detector] = compute_breakdown_metrics(results, "task")
+            # Breakdown metrics (pass token_index for length bucketing)
+            dataset_by_model[detector] = compute_breakdown_metrics(
+                results, "ai_model", token_index
+            )
+            dataset_by_task[detector] = compute_breakdown_metrics(
+                results, "task", token_index
+            )
             dataset_by_length[detector] = compute_breakdown_metrics(
-                results, "length_bucket"
+                results, "length_bucket", token_index
             )
 
         # Store for figures
