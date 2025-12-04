@@ -2,21 +2,23 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-import os
-import random
+
 import numpy as np
 import torch
-from mlp_distribution_model import MlpDistributionModel
+
+from baseline.glimpse.scripts.mlp_distribution_model import MlpDistributionModel
 
 
 def safe_log(prob):
     return np.log(np.array(prob) + 1e-8)
 
+
 class GeometricDistribution:
-    '''
+    """
     Top-K probabilities: p_1, p_2, ..., p_K
     Estimated probabilities: Pr(X=k) = p_K * lambda ^ (k - K), for k > K.
-    '''
+    """
+
     def __init__(self, top_k, rank_size):
         self.name = "GeometricDistribution"
         self.top_k = top_k
@@ -43,7 +45,7 @@ class GeometricDistribution:
             while True:
                 _lambda0 = _lambda
                 minor = _lambda ** (M - K + 1)  # the minor part
-                assert p_rest > 0, f'Error: Invalid p_rest={p_rest}'
+                assert p_rest > 0, f"Error: Invalid p_rest={p_rest}"
                 _lambda = 1 - (_lambda - minor) * p_K / p_rest
                 # check convergence
                 diff = abs(_lambda - _lambda0)
@@ -52,22 +54,26 @@ class GeometricDistribution:
                     break
                 last_diff = diff
             # print(f'Warnining: Invalid lambda={_lambda_old}, re-calculate lambda={_lambda}')
-        assert p_rest >= 0, f'Error: Invalid p_rest={p_rest}'
-        assert 0 <= _lambda <= 1, f'Error: Invalid lambda={_lambda} calculated by p_K={p_K} and p_rest={p_rest}.'
+        assert p_rest >= 0, f"Error: Invalid p_rest={p_rest}"
+        assert (
+            0 <= _lambda <= 1
+        ), f"Error: Invalid lambda={_lambda} calculated by p_K={p_K} and p_rest={p_rest}."
         # estimate the probabilities of the rest tokens
         probs_rest = np.exp(safe_log(p_K) + np.arange(1, M - K + 1) * safe_log(_lambda))
         probs = np.concatenate([probs, probs_rest])
         # check total probability
         # if abs(probs.sum() - 1.0) >= 1e-2:
-            # print(f'Warnining: Invalid total probability: {probs.sum()}')
+        # print(f'Warnining: Invalid total probability: {probs.sum()}')
         probs = probs / probs.sum()
         return probs.tolist()
 
+
 class ZipfianDistribution:
-    '''
+    """
     Top-K probabilities: p_1, p_2, ..., p_K
     Estimated probabilities: Pr(X=k) = p_K * (beta / (k - K + beta)) ^ alpha, for k > K.
-    '''
+    """
+
     def __init__(self, top_k, rank_size):
         self.name = "ZipfianDistribution"
         self.top_k = top_k
@@ -113,11 +119,13 @@ class ZipfianDistribution:
         p_K = probs[-1]  # the k-th top token
         p_rest = 1 - probs.sum()  # the rest probability mass
         alpha, beta = self._find_alpha_beta(p_rest / p_K)
-        assert p_rest >= 0, f'Error: Invalid p_rest={p_rest}'
-        assert 0 <= alpha < 10, f'Error: Invalid alpha={alpha}'
-        assert 0 <= beta < 20, f'Error: Invalid beta={beta}'
+        assert p_rest >= 0, f"Error: Invalid p_rest={p_rest}"
+        assert 0 <= alpha < 10, f"Error: Invalid alpha={alpha}"
+        assert 0 <= beta < 20, f"Error: Invalid beta={beta}"
         # estimate the probabilities of the rest tokens
-        probs_rest = np.exp(safe_log(p_K) + alpha * safe_log(beta / (np.arange(1, M - K + 1) + beta)))
+        probs_rest = np.exp(
+            safe_log(p_K) + alpha * safe_log(beta / (np.arange(1, M - K + 1) + beta))
+        )
         probs = np.concatenate([probs, probs_rest])
         # check total probability
         # if abs(probs.sum() - 1.0) >= 1e-2:
@@ -127,10 +135,11 @@ class ZipfianDistribution:
 
 
 class MlpDistribution:
-    '''
+    """
     Top-K probabilities: p_1, p_2, ..., p_K
     Estimated probabilities: Pr(X=k) = p_rest * p_MLP(k - K), for k > K.
-    '''
+    """
+
     def __init__(self, top_k, rank_size, device):
         self.name = "MlpDistribution"
         self.top_k = top_k
@@ -138,9 +147,13 @@ class MlpDistribution:
         self.device = device
 
     def _get_model(self):
-        if getattr(self, 'model', None) is None:
+        if getattr(self, "model", None) is None:
             self.model = MlpDistributionModel(10, self.rank_size)
-            self.model.load_state_dict(torch.load(f'./exp_main/model/mlp_distribution_model.ranksize{self.rank_size}.pt'))
+            self.model.load_state_dict(
+                torch.load(
+                    f"./exp_main/model/mlp_distribution_model.ranksize{self.rank_size}.pt"
+                )
+            )
             self.model.move_to(self.device)
         return self.model
 

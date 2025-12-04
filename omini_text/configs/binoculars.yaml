@@ -6,15 +6,15 @@
 model: binoculars
 
 # Model Configuration (two models: observer + performer)
-observer_name: tiiuae/falcon-7b       # Base model for computing cross-perplexity
-performer_name: tiiuae/falcon-7b-instruct  # Instruction-tuned variant
+observer_name: tiiuae/falcon-7b # Base model for computing cross-perplexity
+performer_name: tiiuae/falcon-7b-instruct # Instruction-tuned variant
 
 # Recommended Model Pairs (must share tokenizer):
 # - falcon-7b + falcon-7b-instruct: Default, best calibrated (14GB VRAM total)
 # - Llama-2-7b + Llama-2-7b-chat: Alternative, requires HF token (14GB VRAM)
 
 # Detection Mode
-mode: low-fpr  # Options: "low-fpr" (0.01% FPR), "accuracy" (balanced F1)
+mode: low-fpr # Options: "low-fpr" (0.01% FPR), "accuracy" (balanced F1)
 
 # Thresholds (pre-calibrated on Falcon-7B):
 # - low-fpr: 0.8536 (optimized for very low false positive rate)
@@ -22,8 +22,8 @@ mode: low-fpr  # Options: "low-fpr" (0.01% FPR), "accuracy" (balanced F1)
 # threshold: 0.85  # Uncomment to override mode-based threshold
 
 # Model Settings
-max_token_observed: 512  # Maximum tokens to analyze (default: 512)
-use_bfloat16: true       # Use bfloat16 precision for efficiency
+max_token_observed: 1024 # Maximum tokens to analyze (can increase for longer texts)
+use_bfloat16: true # Use bfloat16 precision for efficiency
 
 # Performance Notes:
 # - Speed: 0.5-2s per text (depends on length and GPU)

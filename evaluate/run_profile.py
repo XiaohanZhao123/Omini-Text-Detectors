@@ -19,13 +19,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Now safe to import data_loader
 from evaluate.data_loader import DATASETS, EvalRecord, load_dataset
 from omini_text import pipeline
-from omini_text.detectors import (
-    BinocularsDetector,
-    DesklibDetector,
-    E5SmallDetector,
-    GlimpseDetector,
-    RADARDetector,
-)
 
 DETECTORS = ["e5-small", "desklib", "radar", "binoculars", "fast-detectgpt", "glimpse"]
 
@@ -37,6 +30,7 @@ def parse_args():
     parser.add_argument(
         "--detectors",
         nargs="+",
+        default=["all"],
         help=f"Detectors to run. Options: {DETECTORS} or 'all' (default: all)",
     )
     parser.add_argument(
@@ -231,9 +225,31 @@ def main():
     with open(log_path, "w") as f:
         json.dump(profile_log, f, indent=2)
 
-    print(f"\n=== Profile Complete ===")
+    # Save accuracy summary as CSV
+    csv_path = run_dir / "accuracy_summary.csv"
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            ["dataset", "detector", "accuracy", "correct", "total", "elapsed_seconds"]
+        )
+        for dataset in datasets:
+            for detector in detectors:
+                stats = profile_log["summary"][dataset]["detectors"][detector]
+                writer.writerow(
+                    [
+                        dataset,
+                        detector,
+                        round(stats.get("accuracy", 0), 2),
+                        stats.get("correct", 0),
+                        stats.get("records", 0),
+                        stats.get("elapsed_seconds", 0),
+                    ]
+                )
+
+    print("\n=== Profile Complete ===")
     print(f"Results saved to: {run_dir}")
     print(f"Profile log: {log_path}")
+    print(f"Accuracy CSV: {csv_path}")
 
 
 if __name__ == "__main__":

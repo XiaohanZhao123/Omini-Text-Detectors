@@ -8,6 +8,7 @@ Note: Requires transformers library to be installed.
 """
 
 from typing import Dict
+
 from transformers import pipeline
 
 from omini_text.detectors import BaseDetector
@@ -35,23 +36,18 @@ class E5SmallDetector(BaseDetector):
 
         # Get model path
         model_path = config.get(
-            'model_path',
-            'MayZhou/e5-small-lora-ai-generated-detector'
+            "model_path", "MayZhou/e5-small-lora-ai-generated-detector"
         )
 
         # Get device setting
-        device = config.get('device', 'auto')
-        if device == 'auto':
+        device = config.get("device", "auto")
+        if device == "auto":
             device = -1  # -1 for CPU, 0+ for GPU in pipeline
 
         # Initialize HuggingFace pipeline
-        self.pipe = pipeline(
-            'text-classification',
-            model=model_path,
-            device=device
-        )
+        self.pipe = pipeline("text-classification", model=model_path, device=device)
 
-        self.threshold = config.get('threshold', 0.5)
+        self.threshold = config.get("threshold", 0.5)
 
     def detect(self, text: str) -> Dict:
         """
@@ -72,23 +68,22 @@ class E5SmallDetector(BaseDetector):
             }
         """
         # Run inference using HuggingFace pipeline
-        result = self.pipe(text)[0]
+        # Note: e5-small has max_position_embeddings=512, must truncate long texts
+        result = self.pipe(text, truncation=True, max_length=512)[0]
 
         # Extract probability for AI-generated class (LABEL_1)
-        if result['label'] == 'LABEL_1':
-            prob = result['score']
+        if result["label"] == "LABEL_1":
+            prob = result["score"]
         else:  # LABEL_0 (human-written)
-            prob = 1.0 - result['score']
+            prob = 1.0 - result["score"]
 
         # Determine label based on threshold
         label = 1 if prob >= self.threshold else 0
 
         # Return standardized result
         return {
-            'text': text,
-            'label': label,
-            'score': float(prob),
-            'metadata': {
-                'num_tokens': len(text.split())
-            }
+            "text": text,
+            "label": label,
+            "score": float(prob),
+            "metadata": {"num_tokens": len(text.split())},
         }

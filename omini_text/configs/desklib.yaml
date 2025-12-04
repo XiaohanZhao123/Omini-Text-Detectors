@@ -6,14 +6,14 @@
 model: desklib
 
 # Model Configuration
-model_path: baseline/desklib/ai-text-detector-v1.01  # Local path or HuggingFace
+model_path: desklib/ai-text-detector-v1.01 # HuggingFace model ID
 
 # Device Configuration
-device: auto  # Options: auto (recommended), cuda, cpu
+device: auto # Options: auto (recommended), cuda, cpu
 
 # Detection Configuration
-threshold: 0.5    # Classification threshold (0.0-1.0), higher = more precision
-max_length: 768   # Max sequence length (128-1024), longer = more memory
+threshold: 0.5 # Classification threshold (0.0-1.0), higher = more precision
+max_length: 768 # Max sequence length (128-1024), longer = more memory
 
 # Performance Notes:
 # - Inference: ~20ms per text (GPU), ~100ms (CPU)

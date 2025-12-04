@@ -8,34 +8,14 @@ proprietary models (GPT-3.5, GPT-4, Claude, Gemini).
 Note: Requires torch and baseline/glimpse dependencies to be installed.
 """
 
+import argparse
 import os
-import sys
 from pathlib import Path
 from typing import Dict
+
 from dotenv import load_dotenv
-import argparse
 
 from omini_text.detectors import BaseDetector
-
-# Add baseline/glimpse/scripts to Python path
-glimpse_path = Path(__file__).parent.parent.parent / "baseline" / "glimpse" / "scripts"
-sys.path.insert(0, str(glimpse_path))
-
-
-class GlimpseWrapper:
-    """
-    Wrapper for the baseline Glimpse class.
-    Simply delegates to the baseline implementation.
-    """
-    def __init__(self, args):
-        from local_infer import Glimpse
-
-        # Use the original Glimpse class from baseline
-        self.glimpse = Glimpse(args)
-
-    def compute_prob(self, text):
-        """Compute probability of text being AI-generated."""
-        return self.glimpse.compute_prob(text)
 
 
 class GlimpseDetector(BaseDetector):
@@ -67,7 +47,7 @@ class GlimpseDetector(BaseDetector):
         load_dotenv(env_path)
 
         # Get API key from environment
-        api_key = os.getenv('OPENAI_API_KEY') or os.getenv('AZURE_OPENAI_API_KEY')
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
         if not api_key:
             raise ValueError(
                 "API key not found. Please set OPENAI_API_KEY or AZURE_OPENAI_API_KEY "
@@ -75,19 +55,19 @@ class GlimpseDetector(BaseDetector):
             )
 
         # Override config with environment variables if present
-        if os.getenv('AZURE_OPENAI_ENDPOINT'):
-            config['api_base'] = os.getenv('AZURE_OPENAI_ENDPOINT')
-        if os.getenv('AZURE_OPENAI_API_VERSION'):
-            config['api_version'] = os.getenv('AZURE_OPENAI_API_VERSION')
+        if os.getenv("AZURE_OPENAI_ENDPOINT"):
+            config["api_base"] = os.getenv("AZURE_OPENAI_ENDPOINT")
+        if os.getenv("AZURE_OPENAI_API_VERSION"):
+            config["api_version"] = os.getenv("AZURE_OPENAI_API_VERSION")
 
-        config['api_key'] = api_key
+        config["api_key"] = api_key
 
         # Convert config dict to argparse Namespace
         args = argparse.Namespace(**config)
 
-        # Initialize Glimpse detector with our wrapper
-        self.glimpse = GlimpseWrapper(args)
-        self.threshold = config.get('threshold', 0.5)
+        # Initialize Glimpse detector
+        self.glimpse = Glimpse(args)
+        self.threshold = config.get("threshold", 0.5)
 
     def detect(self, text: str) -> Dict:
         """
@@ -116,11 +96,8 @@ class GlimpseDetector(BaseDetector):
 
         # Return standardized result
         return {
-            'text': text,
-            'label': label,
-            'score': float(prob),
-            'metadata': {
-                'criterion': float(criterion),
-                'num_tokens': int(num_tokens)
-            }
+            "text": text,
+            "label": label,
+            "score": float(prob),
+            "metadata": {"criterion": float(criterion), "num_tokens": int(num_tokens)},
         }

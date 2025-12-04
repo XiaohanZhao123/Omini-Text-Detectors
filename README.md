@@ -125,6 +125,41 @@ result = pipe("Text to analyze")
 
 See [examples/](examples/) for more usage patterns.
 
+## Evaluation
+
+Run detectors on evaluation datasets and generate accuracy reports:
+
+```bash
+cd evaluate
+
+# Run all detectors on all datasets
+python run_profile.py
+
+# Run specific detectors on specific datasets
+python run_profile.py --detectors e5-small radar --datasets enron privacy
+
+# Specify custom data directory
+python run_profile.py --data_dir /path/to/data --output_dir /path/to/results
+```
+
+**Output:**
+- `results/<timestamp>/` – Timestamped results directory
+- `results/<timestamp>/<dataset>/<detector>.jsonl` – Per-record predictions
+- `results/<timestamp>/profile_log.json` – Run metadata and statistics
+- `results/<timestamp>/accuracy_summary.csv` – Accuracy table
+
+**Available datasets:** `education`, `enron`, `privacy`
+
+**Output record format:**
+```json
+{
+  "detection": {"detector": "e5-small", "label": 1, "correct": true},
+  "ground_truth": {"label": 1},
+  "metadata": {"domain": "business", "task": "title_to_body", "ai_model": "qwen3_8b"},
+  "score": 0.95
+}
+```
+
 ## Project Structure
 
 ```
@@ -136,9 +171,12 @@ Omini-Text/
 │   ├── fast-detect-gpt/
 │   ├── glimpse/
 │   ├── binoculars/
-│   ├── radar/            # RADAR detector
+│   ├── radar/
 │   ├── e5_small/
 │   └── desklib/
+├── evaluate/             # Evaluation pipeline
+│   ├── run_profile.py    # Main evaluation script
+│   └── data_loader.py    # Dataset loading utilities
 ├── examples/             # Usage examples
 ├── docs/                 # Documentation
 │   ├── QUICKSTART.md     # 5-minute tutorial
