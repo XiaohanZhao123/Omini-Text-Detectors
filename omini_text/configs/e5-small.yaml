@@ -5,13 +5,13 @@
 model: e5-small
 
 # Model Configuration
-model_path: MayZhou/e5-small-lora-ai-generated-detector  # HuggingFace path or local checkpoint
+model_path: MayZhou/e5-small-lora-ai-generated-detector # HuggingFace path or local checkpoint
 
 # Device Configuration
-device: auto  # Options: auto (recommended), cuda, cpu
+device: auto # Options: auto (recommended), cuda, cpu
 
 # Detection Configuration
-threshold: 0.5  # Classification threshold (0.0-1.0), higher = more precision
+threshold: 0.85 # Classification threshold (original training used 0.85 for optimal accuracy)
 
 # Performance Notes:
 # - Inference: ~10ms per text (GPU), ~50ms (CPU)

@@ -10,7 +10,7 @@ Reference: https://arxiv.org/abs/2401.12070
 
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Union
 
 from omini_text.detectors import BaseDetector
 
@@ -76,7 +76,7 @@ class BinocularsDetector(BaseDetector):
         use_bfloat16 = config.get("use_bfloat16", True)
 
         # Print initialization info
-        print(f"\n🔭 Initializing Binoculars Detector")
+        print("\n🔭 Initializing Binoculars Detector")
         print(f"   Observer model: {observer_name}")
         print(f"   Performer model: {performer_name}")
         print(f"   Mode: {mode}")
@@ -100,19 +100,19 @@ class BinocularsDetector(BaseDetector):
 
         self.mode = mode
 
-    def detect(self, text: str) -> Dict:
+    def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
         """
-        Detect if text is AI-generated.
+        Detect if text is AI-generated. Supports single text or batch.
 
         Args:
-            text: Input text to analyze
+            text: Input text or list of texts to analyze
 
         Returns:
-            Result dictionary:
+            Result dictionary (single) or list of dictionaries (batch):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
-                'score': float,        # Probability of being AI (0.0-1.0)
+                'score': float,        # Detection score (higher = more likely AI)
                 'metadata': {
                     'binoculars_score': float,  # Raw Binoculars score (ppl/x-ppl)
                     'threshold': float,          # Classification threshold
@@ -121,34 +121,27 @@ class BinocularsDetector(BaseDetector):
                 }
             }
         """
-        # Compute Binoculars score
+        # Handle batch input
+        if isinstance(text, list):
+            return self._detect_batch(text)
+
+        # Single text inference
+        return self._detect_single(text)
+
+    def _detect_single(self, text: str) -> Dict:
+        """Detect single text."""
         binoculars_score = self.detector.compute_score(text)
         prediction = self.detector.predict(text)
 
-        # Convert to standard format
-        # Binoculars: score < threshold means AI-generated
-        # We need: score closer to 1.0 means more likely AI
+        # Binoculars: lower score = more likely AI
+        # For summarize.py: higher score = more likely AI
         threshold = self.detector.threshold
-
-        # Normalize score to [0, 1] probability where higher = more likely AI
-        # Using sigmoid-like transformation centered at threshold
-        if binoculars_score < threshold:
-            # AI-generated: map [0, threshold) to [0.5, 1.0]
-            normalized_score = 0.5 + 0.5 * (threshold - binoculars_score) / threshold
-            label = 1
-        else:
-            # Human-written: map [threshold, inf) to [0.0, 0.5)
-            # Use exponential decay for scores above threshold
-            normalized_score = 0.5 * threshold / max(binoculars_score, threshold)
-            label = 0
-
-        # Clamp to [0, 1]
-        normalized_score = max(0.0, min(1.0, normalized_score))
+        label = 1 if binoculars_score < threshold else 0
 
         return {
             "text": text,
             "label": label,
-            "score": float(normalized_score),
+            "score": float(-binoculars_score),  # Negate: higher = more AI
             "metadata": {
                 "binoculars_score": float(binoculars_score),
                 "threshold": float(threshold),
@@ -156,3 +149,57 @@ class BinocularsDetector(BaseDetector):
                 "prediction": prediction,
             },
         }
+
+    def _detect_batch(self, texts: List[str]) -> List[Dict]:
+        """Detect batch of texts. Binoculars natively supports batch."""
+        # Binoculars compute_score accepts list and returns list
+        binoculars_scores = self.detector.compute_score(texts)
+        predictions = self.detector.predict(texts)
+
+        threshold = self.detector.threshold
+        results = []
+        for text, score, prediction in zip(texts, binoculars_scores, predictions):
+            label = 1 if score < threshold else 0
+            results.append(
+                {
+                    "text": text,
+                    "label": label,
+                    "score": float(-score),  # Negate: higher = more AI
+                    "metadata": {
+                        "binoculars_score": float(score),
+                        "threshold": float(threshold),
+                        "mode": self.mode,
+                        "prediction": prediction,
+                    },
+                }
+            )
+
+        return results
+
+    def cleanup(self):
+        """Release GPU memory by deleting models and clearing CUDA cache."""
+        import gc
+
+        import torch
+
+        if hasattr(self, "detector") and self.detector is not None:
+            # Delete observer model
+            if hasattr(self.detector, "observer_model"):
+                del self.detector.observer_model
+            if hasattr(self.detector, "observer_tokenizer"):
+                del self.detector.observer_tokenizer
+
+            # Delete performer model
+            if hasattr(self.detector, "performer_model"):
+                del self.detector.performer_model
+            if hasattr(self.detector, "performer_tokenizer"):
+                del self.detector.performer_tokenizer
+
+            del self.detector
+            self.detector = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        print("🧹 Binoculars detector cleaned up, GPU memory released")

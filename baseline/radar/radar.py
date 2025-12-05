@@ -9,7 +9,7 @@ Paper: https://arxiv.org/abs/2307.03838
 Model: TrustSafeAI/RADAR-Vicuna-7B
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -96,9 +96,9 @@ class RADARDetector:
             # Apply softmax to get probabilities
             probs = F.softmax(logits, dim=-1)
 
-            # Get probability for AI-generated class (index 1)
-            # Note: RADAR uses [human=0, AI=1] label convention
-            ai_prob = probs[0, 1].item()
+            # Get probability for AI-generated class (index 0)
+            # Note: RADAR uses [AI=0, human=1] label convention
+            ai_prob = probs[0, 0].item()
 
         return ai_prob
 
@@ -181,19 +181,20 @@ class RADARDetector:
                 outputs = self.model(**inputs)
                 logits = outputs.logits
                 probs = F.softmax(logits, dim=-1)
-                ai_probs = probs[:, 1].cpu().numpy()
+                # RADAR uses [AI=0, human=1] label convention
+                ai_probs = probs[:, 0].cpu().numpy()
 
             # Build results for batch
-            for text, score in zip(batch_texts, ai_probs):
-                score = float(score)
-                label = 1 if score >= self.threshold else 0
+            for text, ai_prob in zip(batch_texts, ai_probs):
+                ai_prob = float(ai_prob)
+                label = 1 if ai_prob >= self.threshold else 0
                 prediction = "AI-generated" if label == 1 else "Human-written"
 
                 results.append(
                     {
                         "text": text,
                         "label": label,
-                        "score": score,
+                        "score": ai_prob,
                         "prediction": prediction,
                         "metadata": {
                             "model": self.model_name,

@@ -1,0 +1,56 @@
+# DNA-DetectLLM Detector (Zero-shot detection via mutation-repair paradigm)
+# Uses DNA-inspired mutation-repair approach to detect AI-generated text
+# Reference: https://github.com/Xiaoweizhu57/DNA-DetectLLM
+# See docs/CONFIGURATION.md for detailed parameter descriptions
+
+model: dna-detectllm
+
+# Model Configuration (two models: observer + performer)
+observer_name: tiiuae/falcon-7b # Base model for observation
+performer_name: tiiuae/falcon-7b-instruct # Instruction-tuned variant
+
+# Recommended Model Pairs (must share tokenizer):
+# - falcon-7b + falcon-7b-instruct: Default, best calibrated (14GB VRAM total)
+# - Llama-2-7b + Llama-2-7b-chat: Alternative, requires HF token (14GB VRAM)
+# - Llama-3-8B + Llama-3-8B-Instruct: LLaMA-3 pair, requires HF token
+# - Mistral-7B-v0.1 + Mistral-7B-Instruct-v0.1: Mistral pair
+# - Qwen2.5-7B + Qwen2.5-7B-Instruct: Qwen 2.5 pair
+
+# Detection Mode
+mode: low-fpr # Options: "low-fpr" (0.01% FPR), "accuracy" (balanced F1)
+
+# Thresholds (placeholder values - needs calibration):
+# - low-fpr: 0.55 (placeholder)
+# - accuracy: 0.60 (placeholder)
+# Note: These are NOT the same as Binoculars thresholds
+# threshold: 0.55  # Uncomment to override mode-based threshold
+
+# Model Settings
+max_token_observed: 2048 # Maximum tokens to analyze (higher = more context)
+use_bfloat16: true # Use bfloat16 precision for efficiency
+
+# Device Configuration
+device:
+    split # Options:
+    # - "auto": Auto distribute each model across all GPUs
+    # - "split": Split models across GPUs (observer on cuda:0, performer on cuda:1)
+    # - "cpu": CPU only (very slow)
+    # - "cuda:0": Single GPU (requires ~14GB VRAM)
+    # - "0,1": Specific GPUs for auto distribution
+# Performance Notes:
+# - Speed: 0.5-2s per text (depends on length and GPU)
+# - GPU: Required, ~14GB VRAM for both models
+# - Can use 2 GPUs (observer on cuda:0, performer on cuda:1)
+# - Min text length: 50 tokens recommended
+
+# How it works:
+# 1. Tokenize input text and get logits from both models
+# 2. Compute sum_perplexity (standard + max-token perplexity)
+# 3. Compute cross-entropy between observer and performer distributions
+# 4. DNA score = ppl / (2 * x_ppl)
+# 5. Score < threshold → AI-generated, Score >= threshold → Human
+
+# Usage:
+# from omini_text import get_pipeline_from_cfg
+# pipe = get_pipeline_from_cfg("omini_text/configs/dna-detectllm.yaml")
+# result = pipe("Your text here")

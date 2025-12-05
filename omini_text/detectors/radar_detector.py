@@ -9,7 +9,7 @@ Paper: https://arxiv.org/abs/2307.03838
 Model: TrustSafeAI/RADAR-Vicuna-7B
 """
 
-from typing import Dict
+from typing import Dict, List, Union
 
 import torch
 import torch.nn.functional as F
@@ -63,25 +63,34 @@ class RADARDetector(BaseDetector):
         self.model.to(self.device)
         self.model.eval()
 
-    def detect(self, text: str) -> Dict:
+    def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
         """
-        Detect if text is AI-generated.
+        Detect if text is AI-generated. Supports single text or batch.
 
         Args:
-            text: Input text to analyze
+            text: Input text or list of texts to analyze
 
         Returns:
-            Result dictionary:
+            Result dictionary (single) or list of dictionaries (batch):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
-                'score': float,        # Probability of being AI (0.0-1.0)
+                'score': float,        # Detection score (higher = more likely AI)
                 'metadata': {
                     'model': str,      # Model name used
                     'threshold': float # Classification threshold
                 }
             }
         """
+        # Handle batch input
+        if isinstance(text, list):
+            return self._detect_batch(text)
+
+        # Single text inference
+        return self._detect_single(text)
+
+    def _detect_single(self, text: str) -> Dict:
+        """Detect single text."""
         # Tokenize
         inputs = self.tokenizer(
             text,
@@ -96,16 +105,10 @@ class RADARDetector(BaseDetector):
         with torch.no_grad():
             outputs = self.model(**inputs)
             logits = outputs.logits
-
-            # Apply softmax to get probabilities
             probs = F.softmax(logits, dim=-1)
-
-            # Get probability for AI-generated class (index 0)
-            # RADAR uses [AI=0, human=1] label convention per official repo:
-            # https://github.com/IBM/RADAR - output_probs = ...logits,-1)[:,0].exp()
+            # RADAR uses [AI=0, human=1] label convention
             ai_prob = probs[0, 0].item()
 
-        # Determine label based on threshold
         label = 1 if ai_prob >= self.threshold else 0
 
         return {
@@ -114,3 +117,56 @@ class RADARDetector(BaseDetector):
             "score": float(ai_prob),
             "metadata": {"model": self.model_path, "threshold": self.threshold},
         }
+
+    def _detect_batch(self, texts: List[str]) -> List[Dict]:
+        """Detect batch of texts."""
+        # Tokenize batch
+        inputs = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        # Run inference
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            logits = outputs.logits
+            probs = F.softmax(logits, dim=-1)
+            # RADAR uses [AI=0, human=1] label convention
+            ai_probs = probs[:, 0].cpu().numpy()
+
+        # Build results
+        results = []
+        for text, ai_prob in zip(texts, ai_probs):
+            ai_prob = float(ai_prob)
+            label = 1 if ai_prob >= self.threshold else 0
+            results.append(
+                {
+                    "text": text,
+                    "label": label,
+                    "score": ai_prob,
+                    "metadata": {"model": self.model_path, "threshold": self.threshold},
+                }
+            )
+
+        return results
+
+    def cleanup(self):
+        """Release GPU memory by deleting model and clearing CUDA cache."""
+        import gc
+
+        if hasattr(self, "model") and self.model is not None:
+            del self.model
+            self.model = None
+        if hasattr(self, "tokenizer") and self.tokenizer is not None:
+            del self.tokenizer
+            self.tokenizer = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        print("🧹 RADAR detector cleaned up, GPU memory released")

@@ -7,10 +7,10 @@ transformer-based supervised classifier with mean pooling.
 Note: Requires torch and transformers libraries to be installed.
 """
 
+from typing import Dict
+
 import torch
 import torch.nn as nn
-from pathlib import Path
-from typing import Dict
 from transformers import AutoConfig, AutoModel, AutoTokenizer, PreTrainedModel
 
 from omini_text.detectors import BaseDetector
@@ -94,16 +94,16 @@ class DesklibDetector(BaseDetector):
         super().__init__(config)
 
         # Get model path (can be local path or HuggingFace model ID)
-        model_path = config.get('model_path', 'desklib/ai-text-detector-v1.01')
+        model_path = config.get("model_path", "desklib/ai-text-detector-v1.01")
 
         # Load tokenizer and model (will download from HuggingFace if not found locally)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = DesklibAIDetectionModel.from_pretrained(model_path)
 
         # Set up device
-        device = config.get('device', 'auto')
-        if device == 'auto':
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = config.get("device", "auto")
+        if device == "auto":
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
 
@@ -111,8 +111,8 @@ class DesklibDetector(BaseDetector):
         self.model.eval()
 
         # Configuration parameters
-        self.threshold = config.get('threshold', 0.5)
-        self.max_length = config.get('max_length', 768)
+        self.threshold = config.get("threshold", 0.5)
+        self.max_length = config.get("max_length", 768)
 
     def detect(self, text: str) -> Dict:
         """
@@ -126,7 +126,7 @@ class DesklibDetector(BaseDetector):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
-                'score': float,        # Probability of being AI (0.0-1.0)
+                'score': float,        # Detection score (higher = more likely AI)
                 'metadata': {
                     'num_tokens': int  # Approximate token count
                 }
@@ -135,18 +135,18 @@ class DesklibDetector(BaseDetector):
         # Tokenize input
         encoded = self.tokenizer(
             text,
-            padding='max_length',
+            padding="max_length",
             truncation=True,
             max_length=self.max_length,
-            return_tensors='pt'
+            return_tensors="pt",
         )
-        input_ids = encoded['input_ids'].to(self.device)
-        attention_mask = encoded['attention_mask'].to(self.device)
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
 
         # Run inference
         with torch.no_grad():
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs['logits']
+            logits = outputs["logits"]
             probability = torch.sigmoid(logits).item()
 
         # Determine label based on threshold
@@ -154,10 +154,25 @@ class DesklibDetector(BaseDetector):
 
         # Return standardized result
         return {
-            'text': text,
-            'label': label,
-            'score': float(probability),
-            'metadata': {
-                'num_tokens': len(text.split())
-            }
+            "text": text,
+            "label": label,
+            "score": float(probability),
+            "metadata": {"num_tokens": len(text.split())},
         }
+
+    def cleanup(self):
+        """Release GPU memory by deleting model and clearing CUDA cache."""
+        import gc
+
+        if hasattr(self, "model") and self.model is not None:
+            del self.model
+            self.model = None
+        if hasattr(self, "tokenizer") and self.tokenizer is not None:
+            del self.tokenizer
+            self.tokenizer = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        print("🧹 Desklib detector cleaned up, GPU memory released")

@@ -24,4 +24,4 @@ top_k: 5 # Top tokens from API (5-10)
 prompt: prompt3 # Options: prompt0, prompt3 (recommended), prompt4
 
 # Detection Configuration
-threshold: 0.5 # Classification threshold (0.0-1.0)
+threshold: 0.5 # Classification threshold (calibrated probability, 0.5 = balanced)

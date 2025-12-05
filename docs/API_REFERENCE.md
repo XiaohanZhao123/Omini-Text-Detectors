@@ -12,7 +12,7 @@ Create detector with default configuration.
 
 **Parameters:**
 - `task` (str): Always `"ai-text-detection"`
-- `model` (str): Detector name - `"e5-small"`, `"fast-detectgpt"`, `"glimpse"`, `"desklib"`
+- `model` (str): Detector name - `"e5-small"`, `"fast-detectgpt"`, `"glimpse"`, `"desklib"`, `"binoculars"`, `"radar"`, `"dna-detectllm"`
 
 **Returns:** Callable pipeline object
 

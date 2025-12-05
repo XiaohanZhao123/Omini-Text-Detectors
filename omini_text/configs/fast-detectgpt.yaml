@@ -6,8 +6,8 @@
 model: fast-detectgpt
 
 # Model Configuration (two models: sampling + scoring)
-sampling_model_name: falcon-7b  # See docs for available models
-scoring_model_name: falcon-7b-instruct   # Can be same or different (if tokenizers compatible)
+sampling_model_name: falcon-7b # See docs for available models
+scoring_model_name: falcon-7b-instruct # Can be same or different (if tokenizers compatible)
 
 # Recommended Combinations (pre-calibrated for accuracy):
 # - gpt-neo-2.7B + gpt-neo-2.7B: 82% accuracy, fastest (6-8GB VRAM)
@@ -15,13 +15,13 @@ scoring_model_name: falcon-7b-instruct   # Can be same or different (if tokenize
 # - falcon-7b + falcon-7b-instruct: 89% accuracy, best (14-18GB VRAM)
 
 # Device Configuration
-device: "0,1,2,3"  # Multi-GPU recommended. Options: "0" (single), "0,1,2,3" (multi), "auto"
+device: "0,1,2,3" # Multi-GPU recommended. Options: "0" (single), "0,1,2,3" (multi), "auto"
 
 # Cache Configuration
-cache_dir: "../cache"  # HuggingFace model cache directory (relative or absolute)
+cache_dir: "../cache" # HuggingFace model cache directory (relative or absolute)
 
 # Detection Configuration
-threshold: 0.5  # Classification threshold (0.0-1.0)
+threshold: 0.5 # Classification threshold (calibrated probability, 0.5 = balanced)
 
 # Performance Notes:
 # - Speed: 1-7s per text (model-dependent)

@@ -7,16 +7,17 @@ conditional probability curvature to distinguish AI-generated text from human te
 Note: Requires GPU (CPU-only mode is not supported). Install torch and baseline dependencies.
 """
 
-import os
+import argparse
 import sys
 from pathlib import Path
 from typing import Dict
-import argparse
 
 from omini_text.detectors import BaseDetector
 
 # Add baseline/fast-detect-gpt/scripts to Python path
-fast_detectgpt_path = Path(__file__).parent.parent.parent / "baseline" / "fast-detect-gpt" / "scripts"
+fast_detectgpt_path = (
+    Path(__file__).parent.parent.parent / "baseline" / "fast-detect-gpt" / "scripts"
+)
 sys.path.insert(0, str(fast_detectgpt_path))
 
 
@@ -25,6 +26,7 @@ class FastDetectGPTWrapper:
     Wrapper for the baseline FastDetectGPT class.
     Simply delegates to the baseline implementation.
     """
+
     def __init__(self, args):
         from local_infer import FastDetectGPT
 
@@ -49,34 +51,34 @@ class FastDetectGPTDetector(BaseDetector):
 
     # Recommended model combinations with pre-calibrated distributions
     RECOMMENDED_COMBINATIONS = {
-        'gpt-j-6B_gpt-neo-2.7B': {
-            'accuracy': 0.8122,
-            'description': 'Good balance of accuracy and speed'
+        "gpt-j-6B_gpt-neo-2.7B": {
+            "accuracy": 0.8122,
+            "description": "Good balance of accuracy and speed",
         },
-        'gpt-neo-2.7B_gpt-neo-2.7B': {
-            'accuracy': 0.8222,
-            'description': 'Fastest option, single model'
+        "gpt-neo-2.7B_gpt-neo-2.7B": {
+            "accuracy": 0.8222,
+            "description": "Fastest option, single model",
         },
-        'falcon-7b_falcon-7b-instruct': {
-            'accuracy': 0.8938,
-            'description': 'Best accuracy, requires more GPU memory'
-        }
+        "falcon-7b_falcon-7b-instruct": {
+            "accuracy": 0.8938,
+            "description": "Best accuracy, requires more GPU memory",
+        },
     }
 
     # Model name mapping (short name -> HuggingFace full name)
     MODEL_FULLNAMES = {
-        'gpt2': 'gpt2',
-        'gpt2-xl': 'gpt2-xl',
-        'opt-2.7b': 'facebook/opt-2.7b',
-        'gpt-neo-2.7B': 'EleutherAI/gpt-neo-2.7B',
-        'gpt-j-6B': 'EleutherAI/gpt-j-6B',
-        'gpt-neox-20b': 'EleutherAI/gpt-neox-20b',
-        'llama-13b': 'huggyllama/llama-13b',
-        'llama2-13b': 'TheBloke/Llama-2-13B-fp16',
-        'bloom-7b1': 'bigscience/bloom-7b1',
-        'opt-13b': 'facebook/opt-13b',
-        'falcon-7b': 'tiiuae/falcon-7b',
-        'falcon-7b-instruct': 'tiiuae/falcon-7b-instruct',
+        "gpt2": "gpt2",
+        "gpt2-xl": "gpt2-xl",
+        "opt-2.7b": "facebook/opt-2.7b",
+        "gpt-neo-2.7B": "EleutherAI/gpt-neo-2.7B",
+        "gpt-j-6B": "EleutherAI/gpt-j-6B",
+        "gpt-neox-20b": "EleutherAI/gpt-neox-20b",
+        "llama-13b": "huggyllama/llama-13b",
+        "llama2-13b": "TheBloke/Llama-2-13B-fp16",
+        "bloom-7b1": "bigscience/bloom-7b1",
+        "opt-13b": "facebook/opt-13b",
+        "falcon-7b": "tiiuae/falcon-7b",
+        "falcon-7b-instruct": "tiiuae/falcon-7b-instruct",
     }
 
     def __init__(self, config: Dict):
@@ -99,8 +101,8 @@ class FastDetectGPTDetector(BaseDetector):
         super().__init__(config)
 
         # Validate GPU requirement
-        device = config.get('device', '0,1,2,3')
-        if device == 'cpu':
+        device = config.get("device", "0,1,2,3")
+        if device == "cpu":
             raise ValueError(
                 "Fast-DetectGPT requires GPU for inference.\n"
                 "CPU-only mode is not supported due to computational requirements.\n"
@@ -108,14 +110,14 @@ class FastDetectGPTDetector(BaseDetector):
             )
 
         # Get model names
-        sampling_model = config.get('sampling_model_name', 'gpt-neo-2.7B')
-        scoring_model = config.get('scoring_model_name', 'gpt-neo-2.7B')
+        sampling_model = config.get("sampling_model_name", "gpt-neo-2.7B")
+        scoring_model = config.get("scoring_model_name", "gpt-neo-2.7B")
 
         # Validate and warn about model combination
         self._validate_model_combination(sampling_model, scoring_model)
 
         # Set up cache directory
-        cache_dir = config.get('cache_dir', '../cache')
+        cache_dir = config.get("cache_dir", "../cache")
         cache_path = Path(__file__).parent.parent.parent / cache_dir
         cache_path = cache_path.resolve()
 
@@ -124,18 +126,22 @@ class FastDetectGPTDetector(BaseDetector):
             sampling_model_name=sampling_model,
             scoring_model_name=scoring_model,
             device=device,
-            cache_dir=str(cache_path)
+            cache_dir=str(cache_path),
         )
 
         # Initialize Fast-DetectGPT detector with wrapper
-        print(f"\n🚀 Initializing Fast-DetectGPT Detector")
-        print(f"   Sampling model: {sampling_model} ({self.MODEL_FULLNAMES.get(sampling_model, sampling_model)})")
-        print(f"   Scoring model: {scoring_model} ({self.MODEL_FULLNAMES.get(scoring_model, scoring_model)})")
+        print("\n🚀 Initializing Fast-DetectGPT Detector")
+        print(
+            f"   Sampling model: {sampling_model} ({self.MODEL_FULLNAMES.get(sampling_model, sampling_model)})"
+        )
+        print(
+            f"   Scoring model: {scoring_model} ({self.MODEL_FULLNAMES.get(scoring_model, scoring_model)})"
+        )
         print(f"   Device: {device}")
         print(f"   Cache: {cache_path}\n")
 
         self.wrapper = FastDetectGPTWrapper(args)
-        self.threshold = config.get('threshold', 0.5)
+        self.threshold = config.get("threshold", 0.5)
 
     def _validate_model_combination(self, sampling_model: str, scoring_model: str):
         """
@@ -153,9 +159,11 @@ class FastDetectGPTDetector(BaseDetector):
             print(f"   Expected accuracy: {info['accuracy']:.2%}")
             print(f"   {info['description']}\n")
         else:
-            print(f"\n⚠️  Warning: Model combination '{combination_key}' is not pre-calibrated.")
-            print(f"   Results may be less accurate than recommended combinations.\n")
-            print(f"   📋 Recommended combinations:")
+            print(
+                f"\n⚠️  Warning: Model combination '{combination_key}' is not pre-calibrated."
+            )
+            print("   Results may be less accurate than recommended combinations.\n")
+            print("   📋 Recommended combinations:")
             for key, info in self.RECOMMENDED_COMBINATIONS.items():
                 print(f"      • {key}: {info['accuracy']:.2%} - {info['description']}")
             print()
@@ -172,7 +180,7 @@ class FastDetectGPTDetector(BaseDetector):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
-                'score': float,        # Probability of being AI (0.0-1.0)
+                'score': float,        # Detection score (higher = more likely AI)
                 'metadata': {
                     'criterion': float,    # Fast-DetectGPT criterion value
                     'num_tokens': int      # Number of tokens analyzed
@@ -187,11 +195,39 @@ class FastDetectGPTDetector(BaseDetector):
 
         # Return standardized result
         return {
-            'text': text,
-            'label': label,
-            'score': float(prob),
-            'metadata': {
-                'criterion': float(criterion),
-                'num_tokens': int(num_tokens)
-            }
+            "text": text,
+            "label": label,
+            "score": float(prob),
+            "metadata": {"criterion": float(criterion), "num_tokens": int(num_tokens)},
         }
+
+    def cleanup(self):
+        """Release GPU memory by deleting models and clearing CUDA cache."""
+        import gc
+
+        import torch
+
+        if hasattr(self, "wrapper") and self.wrapper is not None:
+            fdgpt = self.wrapper.fast_detect_gpt
+
+            # Delete scoring model
+            if hasattr(fdgpt, "scoring_model"):
+                del fdgpt.scoring_model
+            if hasattr(fdgpt, "scoring_tokenizer"):
+                del fdgpt.scoring_tokenizer
+
+            # Delete sampling model (if different from scoring)
+            if hasattr(fdgpt, "sampling_model"):
+                del fdgpt.sampling_model
+            if hasattr(fdgpt, "sampling_tokenizer"):
+                del fdgpt.sampling_tokenizer
+
+            del self.wrapper.fast_detect_gpt
+            del self.wrapper
+            self.wrapper = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        print("🧹 Fast-DetectGPT detector cleaned up, GPU memory released")

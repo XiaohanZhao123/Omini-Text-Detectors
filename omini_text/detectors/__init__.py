@@ -3,7 +3,7 @@ Detector implementations for Omini-Text.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List, Union
 
 
 class BaseDetector(ABC):
@@ -24,21 +24,30 @@ class BaseDetector(ABC):
         self.config = config
 
     @abstractmethod
-    def detect(self, text: str) -> Dict:
+    def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
         """
-        Detect if text is AI-generated.
+        Detect if text is AI-generated. Supports single text or batch.
 
         Args:
-            text: Input text to analyze
+            text: Input text or list of texts to analyze
 
         Returns:
-            Result dictionary with standard format:
+            Result dictionary (single) or list of dictionaries (batch):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
-                'score': float,        # Probability of being AI (0.0-1.0)
+                'score': float,        # Detection score (higher = more likely AI)
                 'metadata': dict       # Detector-specific debugging info
             }
+        """
+        pass
+
+    def cleanup(self):
+        """
+        Release GPU memory and other resources.
+
+        Override in subclasses that load models to GPU.
+        Called automatically when pipeline is deleted or used as context manager.
         """
         pass
 
@@ -46,6 +55,7 @@ class BaseDetector(ABC):
 # Import detector implementations
 from omini_text.detectors.binoculars_detector import BinocularsDetector
 from omini_text.detectors.desklib_detector import DesklibDetector
+from omini_text.detectors.dna_detectllm_detector import DNADetectLLMDetector
 from omini_text.detectors.e5_small_detector import E5SmallDetector
 from omini_text.detectors.glimpse_detector import GlimpseDetector
 from omini_text.detectors.radar_detector import RADARDetector
@@ -57,4 +67,5 @@ __all__ = [
     "GlimpseDetector",
     "BinocularsDetector",
     "RADARDetector",
+    "DNADetectLLMDetector",
 ]

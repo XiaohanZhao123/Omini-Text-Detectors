@@ -250,6 +250,101 @@ def compute_auroc(y_true: np.ndarray, y_scores: np.ndarray) -> float:
     return auroc
 
 
+def compute_tpr_at_fpr(
+    y_true: np.ndarray, y_scores: np.ndarray, target_fpr: float = 0.05
+) -> Tuple[float, float]:
+    """Compute TPR at a target FPR by finding the optimal threshold.
+
+    Args:
+        y_true: Ground truth labels (0=human, 1=AI)
+        y_scores: Detection scores (higher = more likely AI)
+        target_fpr: Target false positive rate (default 0.05 = 5%)
+
+    Returns:
+        Tuple of (tpr_at_target_fpr, threshold_used)
+    """
+    n_pos = (y_true == 1).sum()
+    n_neg = (y_true == 0).sum()
+
+    if n_pos == 0 or n_neg == 0:
+        return 0.0, 0.0
+
+    # Sort scores in descending order (higher score = more likely AI)
+    sorted_indices = np.argsort(-y_scores)
+    y_true_sorted = y_true[sorted_indices]
+    y_scores_sorted = y_scores[sorted_indices]
+
+    # Walk through thresholds and find the one closest to target FPR
+    best_tpr = 0.0
+    best_threshold = float(y_scores_sorted[0]) + 1e-6  # Start above max score
+
+    tp_count = 0
+    fp_count = 0
+
+    for i, label in enumerate(y_true_sorted):
+        if label == 1:
+            tp_count += 1
+        else:
+            fp_count += 1
+
+        current_fpr = fp_count / n_neg
+        current_tpr = tp_count / n_pos
+
+        # If we just crossed or reached the target FPR
+        if current_fpr <= target_fpr:
+            best_tpr = current_tpr
+            best_threshold = float(y_scores_sorted[i])
+        else:
+            # We've exceeded target FPR, stop
+            break
+
+    return best_tpr, best_threshold
+
+
+def compute_metrics_at_fpr(
+    results: List[Dict], target_fprs: List[float] = None
+) -> Dict[str, Dict]:
+    """Compute TPR and threshold at various FPR levels.
+
+    Args:
+        results: List of result records with scores
+        target_fprs: List of target FPR values (default: [0.01, 0.05, 0.10])
+
+    Returns:
+        Dict mapping FPR level (as string like "fpr_0.05") to {tpr, threshold}
+    """
+    if target_fprs is None:
+        target_fprs = [0.01, 0.05, 0.10]
+
+    if not results:
+        return {f"fpr_{fpr:.2f}": {"tpr": 0.0, "threshold": 0.0} for fpr in target_fprs}
+
+    y_true = []
+    y_scores = []
+
+    for r in results:
+        y_true.append(r["ground_truth"]["label"])
+        score = r.get("score")
+        if score is None:
+            score = float(r["detection"]["label"])
+        y_scores.append(score)
+
+    y_true = np.array(y_true)
+    y_scores = np.array(y_scores)
+
+    metrics_at_fpr = {}
+    for target_fpr in target_fprs:
+        tpr, threshold = compute_tpr_at_fpr(y_true, y_scores, target_fpr)
+        key = f"fpr_{target_fpr:.2f}"
+        metrics_at_fpr[key] = {
+            "tpr": tpr * 100,  # Convert to percentage
+            "threshold": threshold,
+            "target_fpr": target_fpr * 100,
+        }
+
+    return metrics_at_fpr
+
+
 def compute_score_distribution(results: List[Dict], n_bins: int = 20) -> Dict:
     """Compute score distribution for human and AI texts."""
     human_scores = []
@@ -439,6 +534,91 @@ def save_score_distribution_csv(
 
     if rows:
         fieldnames = ["detector", "bin_center", "human_count", "ai_count"]
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"  Saved: {csv_path}")
+
+
+def save_tpr_at_fpr_csv(
+    output_dir: Path,
+    dataset: str,
+    all_results: Dict[str, List[Dict]],
+    target_fprs: List[float] = None,
+):
+    """Save TPR at fixed FPR levels CSV for all detectors.
+
+    This provides calibrated thresholds that achieve specific false positive rates,
+    which is more meaningful for comparing detectors than their default thresholds.
+
+    Args:
+        output_dir: Output directory
+        dataset: Dataset name
+        all_results: {detector: [results]}
+        target_fprs: List of target FPR values (default: [0.01, 0.05, 0.10])
+    """
+    if target_fprs is None:
+        target_fprs = [0.01, 0.05, 0.10]
+
+    csv_path = output_dir / f"{dataset}_tpr_at_fpr.csv"
+    rows = []
+
+    for detector, results in all_results.items():
+        metrics_at_fpr = compute_metrics_at_fpr(results, target_fprs)
+        for fpr_key, metrics in metrics_at_fpr.items():
+            rows.append(
+                {
+                    "detector": detector,
+                    "target_fpr": metrics["target_fpr"],
+                    "tpr": metrics["tpr"],
+                    "threshold": metrics["threshold"],
+                }
+            )
+
+    if rows:
+        fieldnames = ["detector", "target_fpr", "tpr", "threshold"]
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"  Saved: {csv_path}")
+
+
+def save_tpr_at_fpr_summary_csv(
+    output_dir: Path,
+    all_tpr_at_fpr: Dict[str, Dict[str, Dict]],
+):
+    """Save overall TPR@FPR summary CSV (dataset × detector × FPR level).
+
+    Args:
+        output_dir: Output directory
+        all_tpr_at_fpr: {dataset: {detector: {fpr_key: {tpr, threshold}}}}
+    """
+    csv_path = output_dir / "tpr_at_fpr_summary.csv"
+    rows = []
+
+    for dataset, detector_metrics in all_tpr_at_fpr.items():
+        for detector, fpr_metrics in detector_metrics.items():
+            row = {"dataset": dataset, "detector": detector}
+            for fpr_key, metrics in fpr_metrics.items():
+                # Add TPR columns like "tpr@1%", "tpr@5%", "tpr@10%"
+                fpr_pct = int(metrics["target_fpr"])
+                row[f"tpr@{fpr_pct}%"] = metrics["tpr"]
+                row[f"threshold@{fpr_pct}%"] = metrics["threshold"]
+            rows.append(row)
+
+    if rows:
+        # Build fieldnames dynamically based on FPR levels
+        base_fields = ["dataset", "detector"]
+        metric_fields = [k for k in rows[0].keys() if k not in base_fields]
+        # Sort metric fields to have tpr first, then threshold
+        tpr_fields = sorted([f for f in metric_fields if f.startswith("tpr@")])
+        threshold_fields = sorted(
+            [f for f in metric_fields if f.startswith("threshold@")]
+        )
+        fieldnames = base_fields + tpr_fields + threshold_fields
+
         with open(csv_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -1215,6 +1395,34 @@ def print_summary(run_dir: Path, all_metrics: Dict[str, Dict[str, Dict]]):
     print(f"\n{'=' * 70}")
 
 
+def print_tpr_at_fpr_summary(run_dir: Path, all_tpr_at_fpr: Dict[str, Dict[str, Dict]]):
+    """Print TPR at fixed FPR levels summary to stdout."""
+    run_id = run_dir.name
+    print(f"\n{'=' * 70}")
+    print(f"TPR @ Fixed FPR (Calibrated Thresholds): {run_id}")
+    print(f"{'=' * 70}")
+
+    for dataset, detector_metrics in all_tpr_at_fpr.items():
+        print(f"\n--- {dataset} ---")
+        print(f"{'Detector':<16} {'TPR@1%':>10} {'TPR@5%':>10} {'TPR@10%':>10}")
+        print("-" * 50)
+
+        for detector, fpr_metrics in detector_metrics.items():
+            tpr_1 = fpr_metrics.get("fpr_0.01", {}).get("tpr", 0)
+            tpr_5 = fpr_metrics.get("fpr_0.05", {}).get("tpr", 0)
+            tpr_10 = fpr_metrics.get("fpr_0.10", {}).get("tpr", 0)
+            print(
+                f"{detector:<16} "
+                f"{tpr_1:>9.1f}% "
+                f"{tpr_5:>9.1f}% "
+                f"{tpr_10:>9.1f}%"
+            )
+
+    print(f"\n{'=' * 70}")
+    print("Note: TPR@X% shows true positive rate when threshold is calibrated")
+    print("      to achieve X% false positive rate on the evaluation set.")
+
+
 def log_to_wandb(run_id: str, all_metrics: Dict, project: str, run_name: str = None):
     """Log metrics to wandb."""
     try:
@@ -1261,6 +1469,7 @@ def main():
     # Collect all data
     all_metrics = {}
     all_data = {}  # For figures
+    all_tpr_at_fpr = {}  # For TPR@FPR analysis
 
     print(f"\nProcessing results from: {run_dir}")
     print(f"Output directory: {output_dir}")
@@ -1290,10 +1499,14 @@ def main():
             print(f"  Built token index with {len(token_index)} entries")
 
         # Second pass: compute metrics using the token index
+        all_tpr_at_fpr[dataset] = {}
         for detector, results in dataset_results.items():
             # Overall metrics
             metrics = compute_metrics(results)
             all_metrics[dataset][detector] = metrics
+
+            # TPR at fixed FPR levels (calibrated thresholds)
+            all_tpr_at_fpr[dataset][detector] = compute_metrics_at_fpr(results)
 
             # Breakdown metrics (pass token_index for length bucketing)
             dataset_by_model[detector] = compute_breakdown_metrics(
@@ -1319,6 +1532,7 @@ def main():
         print(f"  Saving CSVs for {dataset}...")
         save_confusion_matrix_csv(output_dir, dataset, dataset_results)
         save_score_distribution_csv(output_dir, dataset, dataset_results)
+        save_tpr_at_fpr_csv(output_dir, dataset, dataset_results)
 
         # Save breakdown CSVs only if there's meaningful data
         has_model_breakdown = any(len(v) > 0 for v in dataset_by_model.values())
@@ -1333,15 +1547,17 @@ def main():
             save_breakdown_csv(output_dir, dataset, "by_length", dataset_by_length)
 
     # Save overall CSV
-    print(f"\n  Saving overall CSV...")
+    print("\n  Saving overall CSV...")
     save_overall_csv(output_dir, all_metrics)
+    save_tpr_at_fpr_summary_csv(output_dir, all_tpr_at_fpr)
 
     # Print summary
     print_summary(run_dir, all_metrics)
+    print_tpr_at_fpr_summary(run_dir, all_tpr_at_fpr)
 
     # Generate figures
     if not args.no_figures:
-        print(f"\nGenerating figures...")
+        print("\nGenerating figures...")
         generate_figures(output_dir, all_data)
 
     # Log to wandb if requested

@@ -2,7 +2,6 @@
 Core pipeline functions for unified AI text detection interface.
 """
 
-import os
 from pathlib import Path
 from typing import Dict, List, Union
 
@@ -39,6 +38,7 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
         "desklib": "omini_text.detectors.desklib_detector.DesklibDetector",
         "binoculars": "omini_text.detectors.binoculars_detector.BinocularsDetector",
         "radar": "omini_text.detectors.radar_detector.RADARDetector",
+        "dna-detectllm": "omini_text.detectors.dna_detectllm_detector.DNADetectLLMDetector",
     }
 
     if model not in model_map:
@@ -106,7 +106,7 @@ def get_pipeline_from_cfg(cfg_path: str) -> "DetectorPipeline":
     # Remove 'model' from config to avoid duplicate parameter
     config_without_model = {k: v for k, v in config.items() if k != "model"}
     config_without_model = {k: v for k, v in config.items() if k != "model"}
-    config_without_model = {k: v for k, v in config.items() if k != 'model'}
+    config_without_model = {k: v for k, v in config.items() if k != "model"}
 
     # Use pipeline function with config as kwargs
     return pipeline("ai-text-detection", model=model, **config_without_model)
@@ -118,6 +118,11 @@ class DetectorPipeline:
 
     This class wraps detector implementations and provides a consistent interface
     for single and batch text detection.
+
+    Supports context manager for automatic cleanup:
+        with pipeline("ai-text-detection", model="fast-detectgpt") as pipe:
+            result = pipe("Text to analyze")
+        # GPU memory automatically released
     """
 
     def __init__(self, detector):
@@ -157,6 +162,31 @@ class DetectorPipeline:
 
         else:
             raise TypeError(f"Input must be str or List[str], got {type(texts)}")
+
+    def cleanup(self):
+        """
+        Release GPU memory and other resources held by the detector.
+
+        Call this explicitly when done with the pipeline, or use context manager.
+        """
+        if self.detector is not None:
+            self.detector.cleanup()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - cleanup resources."""
+        self.cleanup()
+        return False
+
+    def __del__(self):
+        """Destructor - attempt cleanup when garbage collected."""
+        try:
+            self.cleanup()
+        except Exception:
+            pass  # Ignore errors during garbage collection
 
     def __repr__(self):
         return f"DetectorPipeline(detector={self.detector.__class__.__name__})"

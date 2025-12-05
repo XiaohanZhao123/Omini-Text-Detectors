@@ -21,7 +21,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from evaluate.data_loader import DATASETS, EvalRecord, load_dataset
 from omini_text import pipeline
 
-DETECTORS = ["e5-small", "desklib", "radar", "binoculars", "fast-detectgpt", "glimpse"]
+DETECTORS = [
+    "e5-small",
+    "desklib",
+    "radar",
+    "binoculars",
+    "fast-detectgpt",
+    "glimpse",
+    "dna-detectllm",
+]
 
 
 def parse_args():
@@ -57,6 +65,12 @@ def parse_args():
         type=int,
         default=32,
         help="Batch size for inference (default: 32)",
+    )
+    parser.add_argument(
+        "--raid_max_samples",
+        type=int,
+        default=2000,
+        help="Max samples for RAID dataset, stratified 50/50 human/AI (default: 2000)",
     )
     return parser.parse_args()
 
@@ -106,6 +120,7 @@ def run_detector_on_dataset(
     data_dir: str,
     output_path: Path,
     batch_size: int,
+    dataset_kwargs: dict = None,
 ) -> dict:
     """Run a single detector on a single dataset.
 
@@ -114,6 +129,7 @@ def run_detector_on_dataset(
     """
     print(f"\n=== {detector_name} on {dataset_name} ===")
 
+    pipe = None
     # Load detector
     try:
         pipe = pipeline("ai-text-detection", model=detector_name)
@@ -122,7 +138,8 @@ def run_detector_on_dataset(
         return {"records": 0, "elapsed_seconds": 0, "errors": [str(e)]}
 
     # Load dataset
-    records = list(load_dataset(dataset_name, data_dir))
+    dataset_kwargs = dataset_kwargs or {}
+    records = list(load_dataset(dataset_name, data_dir, **dataset_kwargs))
     total = len(records)
     human_count = sum(1 for r in records if r.ground_truth_label == 0)
     ai_count = total - human_count
@@ -135,28 +152,33 @@ def run_detector_on_dataset(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, "w") as f:
-        for i, record in enumerate(records):
-            try:
-                result = pipe(record.text)
-                output = format_output_record(record, detector_name, result)
-                f.write(json.dumps(output) + "\n")
+    try:
+        with open(output_path, "w") as f:
+            for i, record in enumerate(records):
+                try:
+                    result = pipe(record.text)
+                    output = format_output_record(record, detector_name, result)
+                    f.write(json.dumps(output) + "\n")
 
-                if output["detection"]["correct"]:
-                    correct += 1
+                    if output["detection"]["correct"]:
+                        correct += 1
 
-            except Exception as e:
-                errors.append(
-                    {
-                        "source_file": record.source_file,
-                        "line_index": record.line_index,
-                        "error": str(e),
-                    }
-                )
+                except Exception as e:
+                    errors.append(
+                        {
+                            "source_file": record.source_file,
+                            "line_index": record.line_index,
+                            "error": str(e),
+                        }
+                    )
 
-            # Progress update every 100 records
-            if (i + 1) % 100 == 0:
-                print(f"  Processed {i + 1}/{total}...")
+                # Progress update every 100 records
+                if (i + 1) % 100 == 0:
+                    print(f"  Processed {i + 1}/{total}...")
+    finally:
+        # Cleanup detector to release GPU memory before next detector
+        if pipe is not None:
+            pipe.cleanup()
 
     elapsed = time.time() - start_time
     accuracy = correct / total * 100 if total > 0 else 0
@@ -206,6 +228,11 @@ def main():
     for dataset in datasets:
         profile_log["summary"][dataset] = {"detectors": {}}
 
+        # Build dataset-specific kwargs
+        dataset_kwargs = {}
+        if dataset in ("raid", "raid_train"):
+            dataset_kwargs["max_samples"] = args.raid_max_samples
+
         for detector in detectors:
             output_path = run_dir / dataset / f"{detector}.jsonl"
 
@@ -215,6 +242,7 @@ def main():
                 data_dir=args.data_dir,
                 output_path=output_path,
                 batch_size=args.batch_size,
+                dataset_kwargs=dataset_kwargs,
             )
 
             profile_log["summary"][dataset]["detectors"][detector] = stats

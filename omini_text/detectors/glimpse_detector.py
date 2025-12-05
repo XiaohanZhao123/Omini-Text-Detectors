@@ -82,7 +82,7 @@ class GlimpseDetector(BaseDetector):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
-                'score': float,        # Probability of being AI (0.0-1.0)
+                'score': float,        # Detection score (higher = more likely AI)
                 'metadata': {
                     'criterion': float,    # Glimpse criterion value
                     'num_tokens': int      # Number of tokens analyzed
