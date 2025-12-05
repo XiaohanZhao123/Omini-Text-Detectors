@@ -39,6 +39,7 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
         "binoculars": "omini_text.detectors.binoculars_detector.BinocularsDetector",
         "radar": "omini_text.detectors.radar_detector.RADARDetector",
         "dna-detectllm": "omini_text.detectors.dna_detectllm_detector.DNADetectLLMDetector",
+        "ood-llm-detect": "omini_text.detectors.ood_llm_detector.OODLLMDetector",
     }
 
     if model not in model_map:

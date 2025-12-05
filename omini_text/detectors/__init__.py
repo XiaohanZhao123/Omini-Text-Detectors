@@ -58,6 +58,7 @@ from omini_text.detectors.desklib_detector import DesklibDetector
 from omini_text.detectors.dna_detectllm_detector import DNADetectLLMDetector
 from omini_text.detectors.e5_small_detector import E5SmallDetector
 from omini_text.detectors.glimpse_detector import GlimpseDetector
+from omini_text.detectors.ood_llm_detector import OODLLMDetector
 from omini_text.detectors.radar_detector import RADARDetector
 
 __all__ = [
@@ -68,4 +69,5 @@ __all__ = [
     "BinocularsDetector",
     "RADARDetector",
     "DNADetectLLMDetector",
+    "OODLLMDetector",
 ]

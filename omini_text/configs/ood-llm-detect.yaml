@@ -1,0 +1,27 @@
+# OOD-LLM-Detect Configuration
+# Method: Human Texts Are Outliers (NeurIPS 2025)
+# Paper: https://arxiv.org/abs/2510.08602
+
+model: ood-llm-detect
+
+# Path to trained DeepSVDD model weights
+model_path: baseline/ood-llm-detect/weights/ckpt/dsvdd/deepfake/model_classifier_best.pth
+
+# Detection mode - determines distribution parameters
+# Options: deepfake (general), M4 (multilingual), raid (adversarial-robust)
+mode: raid
+
+# Base transformer model (must match training)
+model_name: princeton-nlp/unsup-simcse-roberta-base
+
+# Output embedding dimension
+out_dim: 768
+
+# Device selection (auto, cuda, cpu)
+device: auto
+
+# Maximum sequence length
+max_length: 512
+
+# Classification threshold (0.0-1.0)
+threshold: 0.5

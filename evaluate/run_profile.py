@@ -29,6 +29,7 @@ DETECTORS = [
     "fast-detectgpt",
     "glimpse",
     "dna-detectllm",
+    "ood-llm-detect",
 ]
 
 
