@@ -32,6 +32,10 @@
 .env.local
 .env.*.local
 
+# Virtual environments
+.venv/
+venv/
+
 # IDE and editor
 .vscode/
 .idea/

@@ -24,6 +24,24 @@ print(result)
 
 ## Installation
 
+### Using uv (Recommended)
+
+[uv](https://github.com/astral-sh/uv) is the fastest Python package manager (~10-100x faster than pip).
+
+```bash
+# Install uv (if not installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup
+git clone https://github.com/your-org/Omini-Text.git
+cd Omini-Text
+uv venv                              # Create virtual environment
+uv pip sync requirements.lock        # Install locked dependencies (reproducible)
+source .venv/bin/activate            # Activate
+```
+
+### Using pip
+
 ```bash
 git clone https://github.com/your-org/Omini-Text.git
 cd Omini-Text
