@@ -1,0 +1,49 @@
+# GigaCheck Detector (Segmentation-based AI text detection)
+# Detects AI-written character intervals within mixed human/AI text
+# Paper: https://arxiv.org/abs/2410.23728
+# See docs/CONFIGURATION.md for detailed parameter descriptions
+
+model: gigacheck
+
+# Model Configuration
+model_path: iitolstykh/GigaCheck-Detector-Multi  # HuggingFace model path
+
+# Device Settings
+device: auto  # Options: "auto", "cuda", "cuda:0", "cpu"
+
+# Detection Parameters
+conf_interval_thresh: 0.8  # Confidence threshold for AI intervals (0.0-1.0)
+
+# Model Details:
+# - Architecture: Mistral-7B backbone + DETR for interval detection
+# - Training: Multi-domain training on LLMTrace dataset
+# - Output: Character-level AI intervals + document classification
+# - License: Apache 2.0
+
+# Performance Notes:
+# - Speed: Slower inference due to Mistral-7B backbone (~2-5s per text on GPU)
+# - GPU: ~14GB VRAM (Mistral-7B)
+# - CPU: Not recommended (too slow)
+# - Supports mixed human/AI text detection
+
+# How it works:
+# 1. Tokenize input text
+# 2. Run through Mistral-7B backbone
+# 3. Classification head predicts: human/ai/mixed
+# 4. DETR head predicts AI-written character intervals
+# 5. Returns document label + AI intervals
+
+# Output format:
+# {
+#   "label": 0/1,  # 0=human, 1=AI (any AI content)
+#   "score": float,  # AI probability
+#   "metadata": {
+#     "pred_label": "human"/"ai"/"mixed",
+#     "ai_intervals": [[start, end], ...],  # Character positions
+#   }
+# }
+
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="gigacheck")
+# result = pipe("Your text here")

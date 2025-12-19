@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A unified interface for 6 state-of-the-art AI text detection methods, spanning zero-shot and supervised approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+A unified interface for 7 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
 
 ## Quick Start
 
@@ -60,6 +60,7 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 | [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) |
 | [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) |
 | [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API |
+| [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection | GPU (~14GB) |
 
 ### Supervised Methods (trained on AI text)
 
@@ -117,6 +118,20 @@ ICLR 2025. Bridges white-box detection with proprietary LLMs (GPT-4, Claude, Gem
 
 ```python
 pipe = pipeline("ai-text-detection", model="glimpse")
+```
+
+### Boundary Detection (character-level segmentation)
+
+#### GigaCheck
+[[Paper](https://arxiv.org/abs/2410.23728)] [[Code](https://github.com/ai-forever/gigacheck)]
+
+arXiv 2024. Mistral-7B + DETR for detecting AI-written character intervals in mixed human/AI text. Returns `ai_intervals` with exact character positions.
+
+```python
+pipe = pipeline("ai-text-detection", model="gigacheck", device="cuda:0")
+result = pipe("Human intro. AI generated middle part. Human ending.")
+# result["metadata"]["ai_intervals"] = [[13, 42]]  # character positions
+# result["metadata"]["pred_label"] = "mixed"  # human/ai/mixed
 ```
 
 ## Usage Examples
@@ -191,7 +206,8 @@ Omini-Text/
 │   ├── binoculars/
 │   ├── radar/
 │   ├── e5_small/
-│   └── desklib/
+│   ├── desklib/
+│   └── gigacheck/
 ├── evaluate/             # Evaluation pipeline
 │   ├── run_profile.py    # Main evaluation script
 │   └── data_loader.py    # Dataset loading utilities
@@ -239,6 +255,13 @@ Omini-Text/
   title={Spotting LLMs With Binoculars: Zero-Shot Detection of Machine-Generated Text},
   author={Hans, Abhimanyu and Schwarzschild, Avi and Ramber, Valeriia and Pirber, Tonmoy and Goldblum, Micah and Goldstein, Tom},
   booktitle={ICML},
+  year={2024}
+}
+
+@article{gigacheck2024,
+  title={GigaCheck: Detecting LLM-generated Content},
+  author={Tolstykh, Ivan and others},
+  journal={arXiv preprint arXiv:2410.23728},
   year={2024}
 }
 ```

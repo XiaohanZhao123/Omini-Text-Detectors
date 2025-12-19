@@ -1,0 +1,3 @@
+[submodule "baseline/gigacheck"]
+	path = baseline/gigacheck
+	url = https://github.com/ai-forever/gigacheck
