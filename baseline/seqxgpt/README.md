@@ -78,7 +78,7 @@ print(result['metadata']['pred_label'])    # human/ai/mixed
 | `feature_models` | List of LLMs for feature extraction | `['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b']` |
 | `feature_devices` | GPU assignment per model | Same as `device` |
 | `classifier_type` | `'transformer'` or `'cnn'` | `'transformer'` |
-| `seq_len` | Max words per document | `512` |
+| `seq_len` | Max words per document | `1024` |
 
 ### Feature Models (as in paper)
 

@@ -75,7 +75,7 @@ class SeqXGPTDetector(BaseDetector):
         # Default to all 4 models as in the paper for ~90% accuracy
         self.feature_models = config.get('feature_models', ['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b'])
         self.feature_devices = config.get('feature_devices', None)
-        self.seq_len = config.get('seq_len', 512)
+        self.seq_len = config.get('seq_len', 1024)  # Paper default is 1024
         self.cache_dir = config.get('cache_dir', None)
         self.threshold = config.get('threshold', 0.5)
 
