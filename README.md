@@ -52,16 +52,18 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 
 ## Available Detectors
 
-| Detector | Type | Venue | Key Feature | Hardware |
-|----------|------|-------|-------------|----------|
-| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU |
-| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU |
-| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU |
-| [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) |
-| [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) |
-| [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API |
-| [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection | GPU (~14GB) |
-| [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES labeling | GPU (~28GB) |
+| Detector | Type | Venue | Key Feature | Hardware | Pretrained |
+|----------|------|-------|-------------|----------|------------|
+| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU | ✅ |
+| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU | ✅ |
+| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU | ✅ |
+| [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) | ✅ |
+| [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) | ✅ |
+| [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API | ✅ |
+| [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection (official) | GPU (~14GB) | ✅ |
+| [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES (reproduction) | GPU (~28GB) | ✅* |
+
+*SeqXGPT requires training but we provide pretrained checkpoint at `zcahjl3/seqxgpt-detector`
 
 ### Supervised Methods (trained on AI text)
 
@@ -124,9 +126,9 @@ pipe = pipeline("ai-text-detection", model="glimpse")
 ### Boundary Detection (character-level segmentation)
 
 #### GigaCheck
-[[Paper](https://arxiv.org/abs/2410.23728)] [[Code](https://github.com/ai-forever/gigacheck)]
+[[Paper](https://arxiv.org/abs/2410.23728)] [[Code](https://github.com/ai-forever/gigacheck)] [[Model](https://huggingface.co/iitolstykh/GigaCheck-Detector-Multi)]
 
-arXiv 2024. Mistral-7B + DETR for detecting AI-written character intervals in mixed human/AI text. Returns `ai_intervals` with exact character positions.
+arXiv 2024. Mistral-7B + DETR for detecting AI-written character intervals in mixed human/AI text. Uses official pretrained weights from HuggingFace - **no training required**.
 
 ```python
 pipe = pipeline("ai-text-detection", model="gigacheck", device="cuda:0")
@@ -138,7 +140,7 @@ result = pipe("Human intro. AI generated middle part. Human ending.")
 #### SeqXGPT
 [[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)] [[Checkpoint](https://huggingface.co/zcahjl3/seqxgpt-detector)]
 
-EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling to identify AI-written spans at word level, with 6-class source attribution.
+EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. **Requires training** - we provide pretrained checkpoint.
 
 **~90% accuracy** | **~28GB VRAM** (distribute across GPUs with `feature_devices`)
 
