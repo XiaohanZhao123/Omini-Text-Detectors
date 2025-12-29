@@ -61,6 +61,8 @@ from omini_text.detectors.gigacheck_detector import GigacheckDetector
 from omini_text.detectors.glimpse_detector import GlimpseDetector
 from omini_text.detectors.ood_llm_detector import OODLLMDetector
 from omini_text.detectors.radar_detector import RADARDetector
+from omini_text.detectors.roft_boundary_detector import RoFTBoundaryDetector
+from omini_text.detectors.seqxgpt_detector import SeqXGPTDetector
 
 __all__ = [
     "BaseDetector",
@@ -72,4 +74,6 @@ __all__ = [
     "DNADetectLLMDetector",
     "OODLLMDetector",
     "GigacheckDetector",
+    "SeqXGPTDetector",
+    "RoFTBoundaryDetector",
 ]

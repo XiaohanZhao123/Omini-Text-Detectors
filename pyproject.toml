@@ -6,4 +6,20 @@ dependencies = [
     "intervaltree",
     "loguru",
     "dacite",
+    "pyyaml",
+    "numpy",
+    "torch>=2.0",
+    "transformers>=4.30",
+    "huggingface_hub",
+    "scipy",
+    "fastNLP",
+]
+
+[project.optional-dependencies]
+seqxgpt = [
+    "torch>=2.0",
+    "transformers>=4.30",
+    "huggingface_hub",
+    "scipy",
+    "fastNLP",
 ]

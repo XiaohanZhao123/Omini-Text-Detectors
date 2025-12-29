@@ -112,22 +112,27 @@ class GigacheckDetector(BaseDetector):
         # Run inference
         result = self.model.predict(text)
 
-        # Extract prediction
-        pred_label = result.get("pred_label", "human")
-        probs = result.get("classification_head_probs", [1.0, 0.0, 0.0])
+        # Extract AI intervals first
         ai_intervals = result.get("ai_intervals", [])
 
         # Convert numpy array to list if needed
         if hasattr(ai_intervals, "tolist"):
             ai_intervals = ai_intervals.tolist()
 
+        # Extract prediction - derive from ai_intervals if classification head not trained
+        probs = result.get("classification_head_probs", None)
+        if "pred_label" in result:
+            pred_label = result["pred_label"]
+        else:
+            # Derive pred_label from ai_intervals when classification head is not trained
+            pred_label = self._derive_label_from_intervals(ai_intervals, len(text))
+
         # Compute binary label: 1 if any AI content detected
         # pred_label can be "human", "ai", or "mixed"
         binary_label = 1 if pred_label in ["ai", "mixed"] else 0
 
-        # Compute AI score from probabilities
-        # probs order depends on id2label mapping
-        ai_score = self._compute_ai_score(probs, pred_label)
+        # Compute AI score from probabilities or intervals
+        ai_score = self._compute_ai_score(probs, pred_label, ai_intervals, len(text))
 
         return {
             "text": text,
@@ -142,28 +147,63 @@ class GigacheckDetector(BaseDetector):
             },
         }
 
-    def _compute_ai_score(self, probs, pred_label: str) -> float:
+    def _derive_label_from_intervals(self, ai_intervals: list, text_len: int) -> str:
         """
-        Compute AI probability score from classification probabilities.
+        Derive pred_label from AI intervals when classification head is not trained.
+
+        Args:
+            ai_intervals: List of [start, end, confidence] intervals
+            text_len: Total text length in characters
+
+        Returns:
+            "human", "ai", or "mixed"
+        """
+        if not ai_intervals or text_len == 0:
+            return "human"
+
+        # Calculate total AI coverage
+        total_ai_chars = 0
+        for interval in ai_intervals:
+            start, end = interval[0], interval[1]
+            total_ai_chars += max(0, end - start)
+
+        coverage = total_ai_chars / text_len
+
+        # Thresholds for classification
+        if coverage >= 0.9:
+            return "ai"
+        elif coverage > 0.1:
+            return "mixed"
+        else:
+            return "human"
+
+    def _compute_ai_score(self, probs, pred_label: str, ai_intervals: list = None, text_len: int = 0) -> float:
+        """
+        Compute AI probability score from classification probabilities or intervals.
 
         For detector model with 3 classes (human, ai, mixed):
         - AI score = P(ai) + P(mixed), since mixed contains AI content
         """
-        if probs is None:
-            # Fallback based on pred_label
-            return 1.0 if pred_label in ["ai", "mixed"] else 0.0
+        if probs is not None:
+            # Find indices for ai and mixed classes
+            ai_idx = self.label2id.get("ai", None)
+            mixed_idx = self.label2id.get("mixed", None)
 
-        # Find indices for ai and mixed classes
-        ai_idx = self.label2id.get("ai", None)
-        mixed_idx = self.label2id.get("mixed", None)
+            ai_score = 0.0
+            if ai_idx is not None and ai_idx < len(probs):
+                ai_score += probs[ai_idx]
+            if mixed_idx is not None and mixed_idx < len(probs):
+                ai_score += probs[mixed_idx]
 
-        ai_score = 0.0
-        if ai_idx is not None and ai_idx < len(probs):
-            ai_score += probs[ai_idx]
-        if mixed_idx is not None and mixed_idx < len(probs):
-            ai_score += probs[mixed_idx]
+            return min(ai_score, 1.0)
 
-        return min(ai_score, 1.0)
+        # Fallback: compute from ai_intervals coverage
+        if ai_intervals and text_len > 0:
+            total_ai_chars = sum(max(0, interval[1] - interval[0]) for interval in ai_intervals)
+            return min(total_ai_chars / text_len, 1.0)
+
+        # Final fallback based on pred_label
+        return 1.0 if pred_label in ["ai", "mixed"] else 0.0
 
     def cleanup(self):
         """Release GPU memory by deleting model and clearing CUDA cache."""
