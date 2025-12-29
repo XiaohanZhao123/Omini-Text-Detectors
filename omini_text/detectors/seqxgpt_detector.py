@@ -59,7 +59,7 @@ class SeqXGPTDetector(BaseDetector):
                 - checkpoint_path: Path to trained classifier weights (required for accuracy)
                 - classifier_type: 'cnn' or 'transformer' (default: 'transformer')
                 - feature_models: List of LLM names for feature extraction
-                                  (default: ['gpt2'])
+                                  (default: ['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b'])
                 - device: Device to use (auto, cuda, cuda:0, cpu) (default: auto)
                 - feature_devices: List of devices for each feature model (optional)
                                    e.g., ['cuda:0', 'cuda:2', 'cuda:4', 'cuda:6']
@@ -72,7 +72,8 @@ class SeqXGPTDetector(BaseDetector):
         # Extract configuration
         self.checkpoint_path = config.get('checkpoint_path', None)
         self.classifier_type = config.get('classifier_type', 'transformer')
-        self.feature_models = config.get('feature_models', ['gpt2'])
+        # Default to all 4 models as in the paper for ~90% accuracy
+        self.feature_models = config.get('feature_models', ['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b'])
         self.feature_devices = config.get('feature_devices', None)
         self.seq_len = config.get('seq_len', 512)
         self.cache_dir = config.get('cache_dir', None)

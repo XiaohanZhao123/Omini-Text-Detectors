@@ -75,12 +75,12 @@ print(result['metadata']['pred_label'])    # human/ai/mixed
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `checkpoint_path` | Path or HuggingFace repo for trained weights | `zcahjl3/seqxgpt-detector` |
-| `feature_models` | List of LLMs for feature extraction | `['gpt2']` |
+| `feature_models` | List of LLMs for feature extraction | `['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b']` |
 | `feature_devices` | GPU assignment per model | Same as `device` |
 | `classifier_type` | `'transformer'` or `'cnn'` | `'transformer'` |
 | `seq_len` | Max words per document | `512` |
 
-### Supported Feature Models
+### Feature Models (as in paper)
 
 | Model | HuggingFace ID | VRAM |
 |-------|---------------|------|
@@ -89,7 +89,7 @@ print(result['metadata']['pred_label'])    # human/ai/mixed
 | GPT-J 6B | `EleutherAI/gpt-j-6B` | ~12GB |
 | LLaMA 7B | `huggyllama/llama-7b` | ~13GB |
 
-**Best accuracy (~90%)**: Use all 4 models with `feature_devices` to distribute across GPUs.
+**Total: ~28GB VRAM** - Use `feature_devices` to distribute across multiple GPUs.
 
 ---
 
