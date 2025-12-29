@@ -140,9 +140,8 @@ result = pipe("Human intro. AI generated middle part. Human ending.")
 #### SeqXGPT
 [[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)] [[Checkpoint](https://huggingface.co/zcahjl3/seqxgpt-detector)]
 
-EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. **Requires training** - we provide pretrained checkpoint.
+EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. **Requires training** - we provide pretrained checkpoint https://huggingface.co/zcahjl3/seqxgpt-detector .
 
-**~90% accuracy** | **~28GB VRAM** (distribute across GPUs with `feature_devices`)
 
 ```python
 pipe = pipeline(
