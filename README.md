@@ -158,6 +158,28 @@ result = pipe("Human intro. AI generated middle part. Human ending.")
 # result["metadata"]["predictions"] = ['S-human', 'S-human', 'B-gpt2', ...]  # per-word BIOES labels
 ```
 
+#### Boundary Detection Output Format
+
+Both GigaCheck and SeqXGPT return character-level AI intervals in a unified format:
+
+```python
+{
+    "text": str,           # Input text
+    "label": int,          # 0=human, 1=AI (binary: any AI content)
+    "score": float,        # AI content coverage ratio (0.0-1.0)
+    "metadata": {
+        "pred_label": str,              # "human", "ai", or "mixed"
+        "ai_intervals": [[start, end], ...],  # Character positions of AI-written spans
+        # GigaCheck-specific:
+        "classification_head_probs": [float, ...],  # Class probabilities
+        # SeqXGPT-specific:
+        "predictions": [str, ...],      # Per-word BIOES labels
+        "words": [str, ...],            # Tokenized words
+        "word_positions": [(int, int), ...]  # Word char positions
+    }
+}
+```
+
 ## Usage Examples
 
 ### Batch Processing
