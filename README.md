@@ -136,16 +136,42 @@ result = pipe("Human intro. AI generated middle part. Human ending.")
 ```
 
 #### SeqXGPT
-[[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)]
+[[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)] [[Checkpoint](https://huggingface.co/zcahjl3/seqxgpt-detector)]
 
-EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo, GPT-J, LLaMA). Uses BIOES sequence labeling to identify AI-written spans.
+EMNLP 2023. Sentence-level AI text detection using log-probability features from multiple LLMs. Extracts perplexity patterns from GPT-2, GPT-Neo, GPT-J, and LLaMA, then uses BIOES sequence labeling to identify AI-written spans at word level.
+
+**Key features:**
+- Word-level detection with character-level interval output
+- 6-class source attribution (GPT-2, GPT-Neo, GPT-J, LLaMA, GPT-3, Human)
+- ~90% accuracy with 4 feature models
+- Multi-GPU support for distributing large models
 
 ```python
+# Basic usage (GPT-2 only, ~0.5GB VRAM)
 pipe = pipeline("ai-text-detection", model="seqxgpt", device="cuda:0")
+
+# Full accuracy (~90%) with 4 models across multiple GPUs
+pipe = pipeline(
+    "ai-text-detection",
+    model="seqxgpt",
+    device="cuda:0",
+    feature_models=['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b'],
+    feature_devices=['cuda:0', 'cuda:0', 'cuda:1', 'cuda:2']  # ~28GB total
+)
+
 result = pipe("Human intro. AI generated middle part. Human ending.")
 # result["metadata"]["ai_intervals"] = [[13, 42]]  # character positions
 # result["metadata"]["pred_label"] = "mixed"  # human/ai/mixed
+# result["metadata"]["predictions"] = ['S-human', 'S-human', 'B-gpt2', ...]  # per-word labels
 ```
+
+**Feature model options:**
+
+| Models | VRAM | Accuracy |
+|--------|------|----------|
+| `['gpt2']` | ~0.5GB | ~75% |
+| `['gpt2', 'gpt-neo-1.3b']` | ~3GB | ~82% |
+| `['gpt2', 'gpt-neo-1.3b', 'gpt-j-6b', 'llama-7b']` | ~28GB | ~90% |
 
 ## Usage Examples
 
