@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A unified interface for 8 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+A unified interface for 9 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
 
 ## Quick Start
 
@@ -62,6 +62,7 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 | [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API | ✅ |
 | [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection (official) | GPU (~14GB) | ✅ |
 | [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES (reproduction) | GPU (~28GB) | ✅* |
+| [RoFT](#roft-boundary) | Boundary | arXiv 2023 | Training-free NLL boundary | GPU (~1-2GB) | ✅ |
 
 *SeqXGPT requires training but we provide pretrained checkpoint at `zcahjl3/seqxgpt-detector`
 
@@ -157,9 +158,24 @@ result = pipe("Human intro. AI generated middle part. Human ending.")
 # result["metadata"]["predictions"] = ['S-human', 'S-human', 'B-gpt2', ...]  # per-word BIOES labels
 ```
 
+#### RoFT Boundary
+[[Paper](https://arxiv.org/abs/2311.08349)] [[Code](https://github.com/silversolver/ai_boundary_detection)]
+
+arXiv 2023. **Training-free** boundary detection using perplexity (NLL) patterns. Detects the transition point where human text ends and AI-generated text begins. No pretrained weights required - uses off-the-shelf LMs (GPT-2).
+
+**Training-free** | **~1-2GB VRAM** | **~15-20% exact, ~40% within ±1 sentence**
+
+```python
+pipe = pipeline("ai-text-detection", model="roft-boundary")
+result = pipe("Human written intro._SEP_AI generated continuation here.")
+# result["metadata"]["boundary_index"] = 1  # Sentence index where AI starts
+# result["metadata"]["ai_intervals"] = [[20, 52]]  # character positions
+# result["metadata"]["sentence_nlls"] = [3.2, 2.1]  # NLL per sentence
+```
+
 #### Boundary Detection Output Format
 
-Both GigaCheck and SeqXGPT return character-level AI intervals in a unified format:
+All three boundary detectors return character-level AI intervals in a unified format:
 
 ```python
 {
@@ -172,12 +188,38 @@ Both GigaCheck and SeqXGPT return character-level AI intervals in a unified form
         # GigaCheck-specific:
         "classification_head_probs": [float, ...],  # Class probabilities
         # SeqXGPT-specific:
-        "predictions": [str, ...],      # Per-word BIOES labels
+        "predictions": [str, ...],      # Per-word BIOES labels (6-class source attribution)
         "words": [str, ...],            # Tokenized words
         "word_positions": [(int, int), ...]  # Word char positions
+        # RoFT-specific:
+        "boundary_index": int,          # Sentence index where AI starts
+        "boundary_char_pos": int,       # Character position of boundary
+        "sentence_nlls": [float, ...]   # NLL per sentence (for debugging)
     }
 }
 ```
+
+**Converting Intervals to Word Labels:**
+
+GigaCheck can convert its character intervals to word-level labels for comparison with SeqXGPT:
+
+```python
+from omini_text.detectors import GigacheckDetector
+
+detector = GigacheckDetector({"device": "cuda:0"})
+result = detector.detect_with_word_labels("Human intro. AI generated text.")
+# result["word_labels"] = ['human', 'human', 'ai', 'ai', 'ai']
+# result["words"] = ['Human', 'intro.', 'AI', 'generated', 'text.']
+```
+
+| Feature | GigaCheck | SeqXGPT | RoFT |
+|---------|-----------|---------|------|
+| Output | Character intervals (DETR) | Word-level BIOES labels | Sentence boundary |
+| Source Attribution | No (binary ai/human) | Yes (6-class) | No |
+| Multi-boundary | Yes | Yes | No (single transition) |
+| Training Required | No (official pretrained) | Yes (checkpoint provided) | No (training-free) |
+| VRAM | ~14GB | ~28GB | ~1-2GB |
+| Accuracy | ~80%+ | ~90% | ~15-20% exact |
 
 ## Usage Examples
 
@@ -253,7 +295,8 @@ Omini-Text/
 │   ├── e5_small/
 │   ├── desklib/
 │   ├── gigacheck/
-│   └── seqxgpt/
+│   ├── seqxgpt/
+│   └── roft-boundary/
 ├── evaluate/             # Evaluation pipeline
 │   ├── run_profile.py    # Main evaluation script
 │   └── data_loader.py    # Dataset loading utilities
@@ -315,6 +358,13 @@ Omini-Text/
   title={SeqXGPT: Sentence-Level AI-Generated Text Detection},
   author={Wang, Pengyu and Li, Linyang and Ren, Ke and Jiang, Botian and Zhang, Dong and Qiu, Xipeng},
   booktitle={EMNLP},
+  year={2023}
+}
+
+@article{roft2023,
+  title={AI-generated text boundary detection with RoFT},
+  author={Kushnareva, Laida and Gaintseva, Tatiana and Magai, German and others},
+  journal={arXiv preprint arXiv:2311.08349},
   year={2023}
 }
 ```

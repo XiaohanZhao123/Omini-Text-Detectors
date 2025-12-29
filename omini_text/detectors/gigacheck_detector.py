@@ -10,7 +10,8 @@ Model: iitolstykh/GigaCheck-Detector-Multi
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
+import re
 
 import torch
 from transformers import AutoConfig
@@ -205,6 +206,89 @@ class GigacheckDetector(BaseDetector):
         # Final fallback based on pred_label
         return 1.0 if pred_label in ["ai", "mixed"] else 0.0
 
+    def intervals_to_word_labels(
+        self, text: str, ai_intervals: List[List[float]]
+    ) -> Dict:
+        """
+        Convert character-level AI intervals to word-level labels.
+
+        This makes GigaCheck output compatible with SeqXGPT's word-level format.
+
+        Args:
+            text: Original text
+            ai_intervals: List of [start, end] or [start, end, confidence] intervals
+
+        Returns:
+            Dictionary with:
+                - 'words': List of words
+                - 'word_positions': List of (start, end) character positions
+                - 'word_labels': List of labels ('ai' or 'human') per word
+        """
+        # Split text into words and get their positions
+        words = []
+        word_positions = []
+
+        for match in re.finditer(r'\S+', text):
+            words.append(match.group())
+            word_positions.append((match.start(), match.end()))
+
+        # Label each word based on overlap with AI intervals
+        word_labels = []
+        for word_start, word_end in word_positions:
+            is_ai = False
+            for interval in ai_intervals:
+                interval_start, interval_end = int(interval[0]), int(interval[1])
+                # Check if word overlaps with AI interval (>50% overlap)
+                overlap_start = max(word_start, interval_start)
+                overlap_end = min(word_end, interval_end)
+                overlap = max(0, overlap_end - overlap_start)
+                word_len = word_end - word_start
+
+                if word_len > 0 and overlap / word_len > 0.5:
+                    is_ai = True
+                    break
+
+            word_labels.append('ai' if is_ai else 'human')
+
+        return {
+            'words': words,
+            'word_positions': word_positions,
+            'word_labels': word_labels
+        }
+
+    def detect_with_word_labels(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
+        """
+        Detect AI-generated content with word-level labels.
+
+        Similar to detect() but includes word-level labels in output,
+        making it compatible with SeqXGPT's output format.
+
+        Args:
+            text: Input text or list of texts
+
+        Returns:
+            Result dictionary with additional 'words', 'word_positions', 'word_labels' fields
+        """
+        if isinstance(text, list):
+            return [self._detect_with_word_labels_single(t) for t in text]
+
+        return self._detect_with_word_labels_single(text)
+
+    def _detect_with_word_labels_single(self, text: str) -> Dict:
+        """Detect single text with word-level labels."""
+        result = self._detect_single(text)
+
+        # Convert intervals to word labels
+        ai_intervals = result['metadata']['ai_intervals']
+        word_result = self.intervals_to_word_labels(text, ai_intervals)
+
+        # Add word-level info to result
+        result['words'] = word_result['words']
+        result['word_positions'] = word_result['word_positions']
+        result['word_labels'] = word_result['word_labels']
+
+        return result
+
     def cleanup(self):
         """Release GPU memory by deleting model and clearing CUDA cache."""
         import gc
@@ -217,4 +301,4 @@ class GigacheckDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 GigaCheck detector cleaned up, GPU memory released")
+        print("GigaCheck detector cleaned up, GPU memory released")
