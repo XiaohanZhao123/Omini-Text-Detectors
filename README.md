@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A unified interface for 7 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+A unified interface for 8 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
 
 ## Quick Start
 
@@ -61,6 +61,7 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 | [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) |
 | [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API |
 | [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection | GPU (~14GB) |
+| [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES labeling | GPU (~28GB) |
 
 ### Supervised Methods (trained on AI text)
 
@@ -129,6 +130,18 @@ arXiv 2024. Mistral-7B + DETR for detecting AI-written character intervals in mi
 
 ```python
 pipe = pipeline("ai-text-detection", model="gigacheck", device="cuda:0")
+result = pipe("Human intro. AI generated middle part. Human ending.")
+# result["metadata"]["ai_intervals"] = [[13, 42]]  # character positions
+# result["metadata"]["pred_label"] = "mixed"  # human/ai/mixed
+```
+
+#### SeqXGPT
+[[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)]
+
+EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo, GPT-J, LLaMA). Uses BIOES sequence labeling to identify AI-written spans.
+
+```python
+pipe = pipeline("ai-text-detection", model="seqxgpt", device="cuda:0")
 result = pipe("Human intro. AI generated middle part. Human ending.")
 # result["metadata"]["ai_intervals"] = [[13, 42]]  # character positions
 # result["metadata"]["pred_label"] = "mixed"  # human/ai/mixed
@@ -207,7 +220,8 @@ Omini-Text/
 │   ├── radar/
 │   ├── e5_small/
 │   ├── desklib/
-│   └── gigacheck/
+│   ├── gigacheck/
+│   └── seqxgpt/
 ├── evaluate/             # Evaluation pipeline
 │   ├── run_profile.py    # Main evaluation script
 │   └── data_loader.py    # Dataset loading utilities
@@ -263,6 +277,13 @@ Omini-Text/
   author={Tolstykh, Ivan and others},
   journal={arXiv preprint arXiv:2410.23728},
   year={2024}
+}
+
+@inproceedings{seqxgpt2023,
+  title={SeqXGPT: Sentence-Level AI-Generated Text Detection},
+  author={Wang, Pengyu and Li, Linyang and Ren, Ke and Jiang, Botian and Zhang, Dong and Qiu, Xipeng},
+  booktitle={EMNLP},
+  year={2023}
 }
 ```
 
