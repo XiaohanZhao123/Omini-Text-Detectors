@@ -126,36 +126,56 @@ pipe = pipeline("ai-text-detection", model="glimpse")
 
 ### Boundary Detection (character-level segmentation)
 
+These methods detect **where** AI-generated content appears within a document, returning character-level intervals.
+
+**Input:** Plain text string (or list for batch processing)
+**Output:** `ai_intervals` with `[start_char, end_char]` positions
+
 #### GigaCheck
 [[Paper](https://arxiv.org/abs/2410.23728)] [[Code](https://github.com/ai-forever/gigacheck)] [[Model](https://huggingface.co/iitolstykh/GigaCheck-Detector-Multi)]
 
 arXiv 2024. Mistral-7B + DETR for detecting AI-written character intervals in mixed human/AI text. Uses official pretrained weights from HuggingFace - **no training required**.
 
+**~14GB VRAM** | **Pretrained**
+
 ```python
 pipe = pipeline("ai-text-detection", model="gigacheck", device="cuda:0")
-result = pipe("Human intro. AI generated middle part. Human ending.")
-# result["metadata"]["ai_intervals"] = [[13, 42]]  # character positions
-# result["metadata"]["pred_label"] = "mixed"  # human/ai/mixed
+
+text = "I went to the coffee shop yesterday. The implementation of transformer architectures revolutionized NLP."
+result = pipe(text)
+
+print(result["label"])                    # 1 (AI detected)
+print(result["score"])                    # 0.68 (AI content ratio)
+print(result["metadata"]["pred_label"])   # "mixed"
+print(result["metadata"]["ai_intervals"]) # [[65, 203]] - character positions
+# Extract AI-generated portion:
+for start, end in result["metadata"]["ai_intervals"]:
+    print(f"AI text: {text[start:end]}")
 ```
 
 #### SeqXGPT
 [[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)] [[Checkpoint](https://huggingface.co/zcahjl3/seqxgpt-detector)]
 
-EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. **Requires training** - we provide pretrained checkpoint https://huggingface.co/zcahjl3/seqxgpt-detector .
+EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. We provide pretrained checkpoint.
 
+**~28GB VRAM** (4 models, distribute with `feature_devices`)
 
 ```python
 pipe = pipeline(
     "ai-text-detection",
     model="seqxgpt",
     device="cuda:0",
-    feature_devices=['cuda:0', 'cuda:0', 'cuda:1', 'cuda:2']  # Distribute 4 models
+    feature_devices=['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']  # Distribute 4 models
 )
 
-result = pipe("Human intro. AI generated middle part. Human ending.")
-# result["metadata"]["ai_intervals"] = [[13, 42]]  # character positions
-# result["metadata"]["pred_label"] = "mixed"  # human/ai/mixed
-# result["metadata"]["predictions"] = ['S-human', 'S-human', 'B-gpt2', ...]  # per-word BIOES labels
+text = "I went to the coffee shop. The transformer architecture enables parallel computation."
+result = pipe(text)
+
+print(result["label"])                         # 0 or 1
+print(result["metadata"]["pred_label"])        # "human", "ai", or "mixed"
+print(result["metadata"]["ai_intervals"])      # [[start, end], ...] character positions
+print(result["metadata"]["words"][:5])         # ['I', 'went', 'to', 'the', 'coffee']
+print(result["metadata"]["word_predictions"][:5])  # ['B-human', 'M-human', ...]
 ```
 
 #### RoFT Boundary
@@ -163,14 +183,20 @@ result = pipe("Human intro. AI generated middle part. Human ending.")
 
 arXiv 2023. **Training-free** boundary detection using perplexity (NLL) patterns. Detects the transition point where human text ends and AI-generated text begins. No pretrained weights required - uses off-the-shelf LMs (GPT-2).
 
-**Training-free** | **~1-2GB VRAM** | **~15-20% exact, ~40% within ±1 sentence**
+**~1-2GB VRAM** | **Training-free** | Detects single human→AI transition
 
 ```python
-pipe = pipeline("ai-text-detection", model="roft-boundary")
-result = pipe("Human written intro._SEP_AI generated continuation here.")
-# result["metadata"]["boundary_index"] = 1  # Sentence index where AI starts
-# result["metadata"]["ai_intervals"] = [[20, 52]]  # character positions
-# result["metadata"]["sentence_nlls"] = [3.2, 2.1]  # NLL per sentence
+pipe = pipeline("ai-text-detection", model="roft-boundary", device="cuda:0")
+
+# Use _SEP_ to mark sentence boundaries (optional - auto-splits on .!?)
+text = "I went to the coffee shop._SEP_The transformer architecture enables parallel computation._SEP_Machine learning is powerful."
+result = pipe(text)
+
+print(result["label"])                         # 1 (AI detected)
+print(result["score"])                         # 0.34 (AI content ratio)
+print(result["metadata"]["boundary_index"])    # 2 (AI starts at sentence 2)
+print(result["metadata"]["ai_intervals"])      # [[113, 172]] character positions
+print(result["metadata"]["sentence_nlls"])     # [3.90, 7.20, 4.68] NLL per sentence
 ```
 
 #### Boundary Detection Output Format
@@ -214,12 +240,12 @@ result = detector.detect_with_word_labels("Human intro. AI generated text.")
 
 | Feature | GigaCheck | SeqXGPT | RoFT |
 |---------|-----------|---------|------|
-| Output | Character intervals (DETR) | Word-level BIOES labels | Sentence boundary |
-| Source Attribution | No (binary ai/human) | Yes (6-class) | No |
-| Multi-boundary | Yes | Yes | No (single transition) |
-| Training Required | No (official pretrained) | Yes (checkpoint provided) | No (training-free) |
-| VRAM | ~14GB | ~28GB | ~1-2GB |
-| Accuracy | ~80%+ | ~90% | ~15-20% exact |
+| Output | Character intervals | Word BIOES + char intervals | Sentence boundary + char intervals |
+| Source Attribution | No (ai/human) | Yes (gpt2, gptneo, gptj, llama, gpt3re, human) | No |
+| Multi-boundary | Yes | Yes | No (single human→AI transition) |
+| Training Required | No (pretrained) | Yes (checkpoint provided) | No (training-free) |
+| VRAM | ~14GB | ~28GB (4 models) | ~1-2GB |
+| Speed | ~2-5s/text | ~2-5s/text | ~0.5-2s/text |
 
 ## Usage Examples
 
