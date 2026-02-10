@@ -23,3 +23,8 @@ seqxgpt = [
     "scipy",
     "fastNLP",
 ]
+damasha = [
+    "pytorch-crf",
+    "textstat",
+    "nltk",
+]

@@ -124,3 +124,8 @@ zipp==3.23.0
 intervaltree
 loguru
 dacite
+fastNLP
+# DAMASHA dependencies
+pytorch-crf
+textstat
+nltk

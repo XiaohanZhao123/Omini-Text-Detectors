@@ -40,9 +40,10 @@ class E5SmallDetector(BaseDetector):
         )
 
         # Get device setting
+        import torch
         device = config.get("device", "auto")
         if device == "auto":
-            device = -1  # -1 for CPU, 0+ for GPU in pipeline
+            device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
 
         # Initialize HuggingFace pipeline
         self.pipe = pipeline("text-classification", model=model_path, device=device)

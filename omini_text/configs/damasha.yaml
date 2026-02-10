@@ -1,0 +1,133 @@
+# DAMASHA Detector (Token-level AI text segmentation)
+# The most fine-grained boundary detection available
+# Paper: https://github.com/saitejalekkala33/DAMASHA
+# Model: saiteja33/DAMASHA-RMC on HuggingFace
+#
+# =============================================================================
+# KEY FEATURES
+# =============================================================================
+# - Token-level granularity (finest available among all detectors)
+# - Dual encoder: RoBERTa + ModernBERT fusion
+# - BiGRU + CRF for sequence labeling with valid label constraints
+# - Info-Mask: Style-based attention (TTR, punctuation, POS, readability)
+# - Adversarially robust (trained on attacked text: typos, Unicode, etc.)
+#
+# Accuracy (claimed by authors on DAMASHA-MAS benchmark):
+#   Token-level F1: ~0.98
+#   Span IoU (relaxed): ~0.82
+# =============================================================================
+
+model: damasha
+
+# HuggingFace Model Repository
+# The pretrained model weights are hosted on HuggingFace Hub
+model_path: saiteja33/DAMASHA-RMC
+
+# Checkpoint Filename
+# The specific checkpoint file to download from the repository
+checkpoint_file: RoBERTa_ModernBERT_CRF.pth
+
+# Minimum Words Required
+# Texts shorter than this will return label=0 with an error in metadata
+# The model was trained on longer texts and performs poorly on very short input
+min_words: 30
+
+# Device Settings
+# Options: "auto" (recommended), "cuda", "cuda:0", "cpu"
+# Auto will use CUDA if available, otherwise CPU
+device: auto
+
+# HuggingFace Cache Directory
+# Set to a path to cache downloaded models, or null to use default
+cache_dir: null
+
+# =============================================================================
+# Performance Notes
+# =============================================================================
+# Model size: 3.29 GB (checkpoint only, plus base models)
+# Total download: ~4-5 GB (includes RoBERTa and ModernBERT)
+#
+# GPU Memory:
+#   FP32: ~8-10 GB
+#   FP16: ~4-5 GB (if quantized)
+#
+# Speed: ~1-3s per text (depends on length and GPU)
+# CPU: Supported but significantly slower (~10-30s per text)
+#
+# First run will download:
+#   1. DAMASHA checkpoint from HuggingFace (3.29 GB)
+#   2. roberta-base tokenizer and model
+#   3. ModernBERT-Base model
+#   4. NLTK resources (punkt, averaged_perceptron_tagger)
+
+# =============================================================================
+# Architecture Details
+# =============================================================================
+# Input: Text split into words
+#
+# 1. Dual Encoder:
+#    - RoBERTa-base (125M params)
+#    - ModernBERT-base (150M params)
+#    - Concatenate hidden states, fuse with linear layer
+#
+# 2. Style Features (4-dim per token):
+#    - TTR (Type-Token Ratio / Lexical Diversity)
+#    - Punctuation Density
+#    - POS Density (content words: nouns, verbs, adjectives)
+#    - Flesch-Kincaid Readability Score
+#
+# 3. Info-Mask:
+#    - Project style features to 64-dim
+#    - Multi-head attention (4 heads)
+#    - Sigmoid gating on fused encoder output
+#
+# 4. CRF Layer:
+#    - Viterbi decoding for valid label sequences
+#    - Output: per-token labels (0=Human, 1=AI)
+
+# =============================================================================
+# Output Format (matches GigaCheck/SeqXGPT for compatibility)
+# =============================================================================
+# {
+#   "text": str,           # Input text
+#   "label": 0/1,          # 0=human, 1=AI (any AI content)
+#   "score": float,        # AI content coverage ratio (0.0-1.0)
+#   "metadata": {
+#     "model": "damasha",
+#     "pred_label": "human"/"ai"/"mixed",
+#     "ai_intervals": [[start, end], ...],  # Character positions
+#     "token_predictions": [...],  # Raw token-level predictions
+#     "words": [...],  # Words in text
+#     "word_labels": ["human", "ai", ...],  # Label per word
+#     "word_positions": [[start, end], ...],  # Char positions per word
+#     "info_mask": [...],  # Style attention weights
+#   }
+# }
+
+# =============================================================================
+# Usage Examples
+# =============================================================================
+# from omini_text import pipeline
+#
+# # Basic usage
+# pipe = pipeline("ai-text-detection", model="damasha")
+# result = pipe("Your mixed human/AI text here with at least 30 words...")
+#
+# # Access token-level labels
+# for word, label in zip(result['metadata']['words'], result['metadata']['word_labels']):
+#     print(f"{word}: {label}")
+#
+# # Get AI intervals (character positions)
+# print(result['metadata']['ai_intervals'])  # [[45, 120], [200, 350]]
+#
+# # Batch processing
+# results = pipe(["Text 1 with enough words...", "Text 2 with enough words..."])
+
+# =============================================================================
+# Limitations
+# =============================================================================
+# 1. English only - not designed for other languages
+# 2. Minimum 30 words - shorter texts return human label with error
+# 3. Max 512 tokens - longer texts are truncated
+# 4. Large model - requires significant GPU memory
+# 5. Recent release (Oct 2025) - limited external validation

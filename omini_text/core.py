@@ -43,6 +43,7 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
         "gigacheck": "omini_text.detectors.gigacheck_detector.GigacheckDetector",
         "seqxgpt": "omini_text.detectors.seqxgpt_detector.SeqXGPTDetector",
         "roft-boundary": "omini_text.detectors.roft_boundary_detector.RoFTBoundaryDetector",
+        "damasha": "omini_text.detectors.damasha_detector.DAMASHADetector",
     }
 
     if model not in model_map:

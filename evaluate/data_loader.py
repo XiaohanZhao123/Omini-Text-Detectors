@@ -10,7 +10,20 @@ from typing import Iterator
 
 import pandas as pd
 
-DATASETS = ["education", "enron", "privacy", "detectrl", "m4", "raid", "raid_train"]
+DATASETS = [
+    "education",
+    "enron",
+    "privacy",
+    "detectrl",
+    "m4",
+    "raid",
+    "raid_train",
+    # ICML/ACL-standard benchmarks
+    "hc3",           # HC3: Human ChatGPT Comparison Corpus (EMNLP 2023)
+    "turingbench",   # TuringBench (EMNLP 2021)
+    # Multi-round AI-human editing chains
+    "aes_chains",    # AES Chains: progressive AI editing (v0=human, v1-v3=AI-edited)
+]
 
 
 @dataclass
@@ -52,6 +65,12 @@ def load_dataset(name: str, data_dir: str = "data/", **kwargs) -> Iterator[EvalR
         yield from _load_raid(data_dir, split="extra", **kwargs)
     elif name == "raid_train":
         yield from _load_raid(data_dir, split="train", **kwargs)
+    elif name == "hc3":
+        yield from _load_hc3(data_dir, **kwargs)
+    elif name == "turingbench":
+        yield from _load_turingbench(data_dir, **kwargs)
+    elif name == "aes_chains":
+        yield from _load_aes_chains(**kwargs)
     else:
         raise ValueError(f"Unknown dataset: {name}. Must be one of {DATASETS}")
 
@@ -260,21 +279,28 @@ def _load_m4(data_dir: str) -> Iterator[EvalRecord]:
 def _load_raid(
     data_dir: str,
     split: str = "extra",
-    max_samples: int = 2000,
+    max_samples: int = None,
     include_adversarial: bool = False,
 ) -> Iterator[EvalRecord]:
     """Load RAID benchmark dataset.
 
     Args:
         data_dir: Base data directory (unused, RAID uses its own cache)
-        split: RAID split to use - "extra" (OOD) or "train" (in-distribution)
-        max_samples: Max samples to load, stratified 50/50 human/AI (default: 2000)
+        split: RAID split to use - "extra" (OOD), "test", or "train" (in-distribution)
+        max_samples: Max samples to load (None = full dataset, or int for stratified 50/50)
         include_adversarial: Whether to include adversarial attacks (default: False)
 
     Yields:
         EvalRecord for each text sample
+
+    Requires: pip install raid-bench
     """
-    from raid.utils import load_data
+    try:
+        from raid.utils import load_data
+    except ImportError:
+        raise ImportError(
+            "RAID benchmark requires raid-bench package. Install with: pip install raid-bench"
+        )
 
     df = load_data(split=split, include_adversarial=include_adversarial)
 
@@ -282,13 +308,13 @@ def _load_raid(
     human_df = df[df["model"] == "human"]
     ai_df = df[df["model"] != "human"]
 
-    # Stratified sampling: 50% human, 50% AI
-    samples_per_class = max_samples // 2
-
-    if len(human_df) > samples_per_class:
-        human_df = human_df.sample(n=samples_per_class, random_state=42)
-    if len(ai_df) > samples_per_class:
-        ai_df = ai_df.sample(n=samples_per_class, random_state=42)
+    # Stratified sampling if max_samples is specified
+    if max_samples is not None:
+        samples_per_class = max_samples // 2
+        if len(human_df) > samples_per_class:
+            human_df = human_df.sample(n=samples_per_class, random_state=42)
+        if len(ai_df) > samples_per_class:
+            ai_df = ai_df.sample(n=samples_per_class, random_state=42)
 
     # Combine and iterate
     sampled_df = pd.concat([human_df, ai_df], ignore_index=True)
@@ -305,6 +331,279 @@ def _load_raid(
             task=row.get("attack", "none") or "none",
             ai_model=None if is_human else row["model"],
         )
+
+
+def _load_hc3(
+    data_dir: str,
+    subset: str = "all",
+    max_samples: int = None,
+    source: str = "huggingface",
+) -> Iterator[EvalRecord]:
+    """Load HC3 (Human ChatGPT Comparison Corpus) benchmark.
+
+    Paper: "How Close is ChatGPT to Human Experts? Comparison Corpus,
+           Evaluation, and Detection" (EMNLP 2023 Findings)
+    URL: https://arxiv.org/abs/2301.07597
+    HuggingFace: https://huggingface.co/datasets/Hello-SimpleAI/HC3
+
+    The dataset contains question-answer pairs with both human and ChatGPT
+    responses across domains: finance, medicine, open_qa, reddit_eli5, wiki_csai.
+
+    Args:
+        data_dir: Base data directory (unused when source="huggingface")
+        subset: HC3 subset - "all", "finance", "medicine", "open_qa",
+                "reddit_eli5", or "wiki_csai" (default: "all")
+        max_samples: Maximum samples per class (human/AI) (default: None = all)
+        source: "huggingface" to load from HF, "local" for local files
+
+    Yields:
+        EvalRecord for each text sample (human answers and ChatGPT answers)
+    """
+    if source == "huggingface":
+        try:
+            from datasets import load_dataset
+
+            ds = load_dataset("Hello-SimpleAI/HC3", subset, split="train")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load HC3 from HuggingFace: {e}. "
+                "Install with: pip install datasets"
+            )
+    else:
+        # Local loading from Parquet files
+        hc3_dir = Path(data_dir) / "HC3"
+        parquet_path = hc3_dir / f"{subset}.parquet"
+        if not parquet_path.exists():
+            raise FileNotFoundError(
+                f"HC3 data not found at {parquet_path}. "
+                "Download from https://huggingface.co/datasets/Hello-SimpleAI/HC3"
+            )
+        ds = pd.read_parquet(parquet_path).to_dict("records")
+
+    human_count = 0
+    ai_count = 0
+
+    for idx, item in enumerate(ds):
+        question = item.get("question", "")
+        human_answers = item.get("human_answers", [])
+        chatgpt_answers = item.get("chatgpt_answers", [])
+        domain = item.get("source", subset)
+
+        # Yield human answers
+        for ans_idx, answer in enumerate(human_answers):
+            if max_samples and human_count >= max_samples:
+                break
+            if not answer or not answer.strip():
+                continue
+
+            yield EvalRecord(
+                text=answer,
+                ground_truth_label=0,
+                source_file=f"hc3:{subset}",
+                line_index=idx,
+                text_field=f"human_answers[{ans_idx}]",
+                domain=domain,
+                task="qa",
+                ai_model=None,
+            )
+            human_count += 1
+
+        # Yield ChatGPT answers
+        for ans_idx, answer in enumerate(chatgpt_answers):
+            if max_samples and ai_count >= max_samples:
+                break
+            if not answer or not answer.strip():
+                continue
+
+            yield EvalRecord(
+                text=answer,
+                ground_truth_label=1,
+                source_file=f"hc3:{subset}",
+                line_index=idx,
+                text_field=f"chatgpt_answers[{ans_idx}]",
+                domain=domain,
+                task="qa",
+                ai_model="chatgpt",
+            )
+            ai_count += 1
+
+        # Check if we've reached max for both classes
+        if max_samples and human_count >= max_samples and ai_count >= max_samples:
+            break
+
+
+def _load_turingbench(
+    data_dir: str,
+    task: str = "TT",
+    generator: str = "gpt3",
+    split: str = "test",
+    max_samples: int = None,
+) -> Iterator[EvalRecord]:
+    """Load TuringBench benchmark dataset.
+
+    Paper: "TuringBench: A Benchmark Environment for Turing Test in the
+           Age of Neural Text Generation" (EMNLP 2021 Findings)
+    URL: https://arxiv.org/abs/2109.13296
+    HuggingFace: https://huggingface.co/datasets/turingbench/TuringBench
+
+    TuringBench contains ~200K articles with human and machine-generated text
+    from 19 different language models for Turing Test evaluation.
+
+    Dataset structure: TuringBench/<task>_<generator>/<split>.csv
+    CSV format: text,label (where label is "human" or model name)
+
+    Available tasks:
+    - TT: Turing Test (binary human vs machine)
+    - AA: Authorship Attribution (multi-class)
+
+    Available generators for TT task:
+    - gpt1, gpt2_small, gpt2_medium, gpt2_large, gpt2_xl, gpt2_pytorch
+    - gpt3, grover_base, grover_large, grover_mega
+    - ctrl, xlm, xlnet_base, xlnet_large, fair_wmt19, fair_wmt20
+    - transformer_xl, pplm_distil, pplm_gpt2
+
+    Args:
+        data_dir: Base data directory containing TuringBench folder
+        task: Task type - "TT" for Turing Test (default: "TT")
+        generator: Generator model for TT task (default: "gpt3")
+        split: Data split - "train", "valid", or "test" (default: "test")
+        max_samples: Maximum samples per class (default: None = all)
+
+    Yields:
+        EvalRecord for each text sample
+    """
+    import csv
+
+    # Construct path: TuringBench/TT_gpt3/test.csv
+    tb_dir = Path(data_dir) / "TuringBench" / f"{task}_{generator}"
+    csv_path = tb_dir / f"{split}.csv"
+
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"TuringBench data not found at {csv_path}. "
+            "Download TuringBench.zip from "
+            "https://huggingface.co/datasets/turingbench/TuringBench/tree/main "
+            "and extract to data/TuringBench/"
+        )
+
+    human_count = 0
+    ai_count = 0
+
+    with open(csv_path, encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)  # Skip header row
+
+        for idx, row in enumerate(reader):
+            if len(row) < 2:
+                continue
+
+            text = row[0]
+            label = row[1]
+
+            if not text or not text.strip():
+                continue
+
+            is_human = label.lower() == "human"
+
+            # Check max samples
+            if max_samples:
+                if is_human and human_count >= max_samples:
+                    continue
+                if not is_human and ai_count >= max_samples:
+                    continue
+
+            yield EvalRecord(
+                text=text,
+                ground_truth_label=0 if is_human else 1,
+                source_file=str(csv_path),
+                line_index=idx,
+                text_field="text",
+                domain="news",  # TuringBench primarily uses news articles
+                task=f"{task}_{generator}",
+                ai_model=None if is_human else label,
+            )
+
+            if is_human:
+                human_count += 1
+            else:
+                ai_count += 1
+
+            # Check if we've reached max for both classes
+            if max_samples and human_count >= max_samples and ai_count >= max_samples:
+                break
+
+
+def _load_aes_chains(
+    version: str = "all",
+    data_path: str = "/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl",
+) -> Iterator[EvalRecord]:
+    """Load AES Chains multi-round AI-human editing dataset.
+
+    Each document has 4 versions:
+    - v0: Original human draft (ai_ratio=0.0)
+    - v1: First AI edit (mean ai_ratio~0.34)
+    - v2: Second AI edit (mean ai_ratio~0.56)
+    - v3: Third AI edit (mean ai_ratio~0.65)
+
+    For binary classification:
+    - v0 always yields a "human" record (label=0)
+    - vN (N>0) yields an "AI-assisted" record (label=1)
+
+    Args:
+        version: Which AI version to compare against v0.
+                 "v1", "v2", "v3", or "all" (yields all versions).
+                 Default: "all"
+        data_path: Path to the aligned JSONL file.
+
+    Yields:
+        EvalRecord for each text sample
+    """
+    path = Path(data_path)
+    if not path.exists():
+        raise FileNotFoundError(f"AES chains data not found at {data_path}")
+
+    versions_to_load = ["v1", "v2", "v3"] if version == "all" else [version]
+
+    with open(path) as f:
+        for idx, line in enumerate(f):
+            doc = json.loads(line)
+            q_id = doc["q_id"]
+            domain = doc["domain"]
+
+            # Build version lookup
+            version_map = {v["version_id"]: v for v in doc["history"]}
+
+            # Always yield v0 (human) for each AI version we compare against
+            v0 = version_map["v0"]
+            for ver in versions_to_load:
+                if ver not in version_map:
+                    continue
+
+                vn = version_map[ver]
+
+                # Human record (v0)
+                yield EvalRecord(
+                    text=v0["text"],
+                    ground_truth_label=0,
+                    source_file=str(path),
+                    line_index=idx,
+                    text_field=f"v0_vs_{ver}",
+                    domain=domain,
+                    task=f"aes_{ver}",
+                    ai_model=None,
+                )
+
+                # AI-edited record (vN)
+                yield EvalRecord(
+                    text=vn["text"],
+                    ground_truth_label=1,
+                    source_file=str(path),
+                    line_index=idx,
+                    text_field=ver,
+                    domain=domain,
+                    task=f"aes_{ver}",
+                    ai_model=vn["operation"],
+                )
 
 
 if __name__ == "__main__":
