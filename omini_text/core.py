@@ -153,14 +153,11 @@ class DetectorPipeline:
             # Batch texts
             results = pipe(["Text 1", "Text 2", "Text 3"])
         """
-        # Handle single text
         if isinstance(texts, str):
             return self.detector.detect(texts)
-
-        # Handle batch texts
         elif isinstance(texts, list):
-            return [self.detector.detect(text) for text in texts]
-
+            # Delegate to detector - it handles batching if supported
+            return self.detector.detect(texts)
         else:
             raise TypeError(f"Input must be str or List[str], got {type(texts)}")
 

@@ -5,7 +5,7 @@
 model: ood-llm-detect
 
 # Path to trained DeepSVDD model weights
-model_path: baseline/ood-llm-detect/weights/ckpt/dsvdd/deepfake/model_classifier_best.pth
+model_path: baseline/ood-llm-detect/weights/ckpt/dsvdd/raid/model_classifier_best.pth
 
 # Detection mode - determines distribution parameters
 # Options: deepfake (general), M4 (multilingual), raid (adversarial-robust)

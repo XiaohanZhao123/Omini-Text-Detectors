@@ -11,7 +11,7 @@ Note: Requires torch and baseline/glimpse dependencies to be installed.
 import argparse
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Union
 
 from dotenv import load_dotenv
 
@@ -70,15 +70,17 @@ class GlimpseDetector(BaseDetector):
         self.glimpse = Glimpse(args)
         self.threshold = config.get("threshold", 0.5)
 
-    def detect(self, text: str) -> Dict:
+    def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
         """
-        Detect if text is AI-generated.
+        Detect if text is AI-generated. Supports single text or batch.
+
+        Note: Batch processing falls back to sequential (API-bound, no real speedup).
 
         Args:
-            text: Input text to analyze
+            text: Input text or list of texts to analyze
 
         Returns:
-            Result dictionary:
+            Result dictionary (single) or list of dictionaries (batch):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
@@ -89,13 +91,16 @@ class GlimpseDetector(BaseDetector):
                 }
             }
         """
-        # Compute probability using Glimpse
-        prob, criterion, num_tokens = self.glimpse.compute_prob(text)
+        if isinstance(text, list):
+            # API-bound, process sequentially
+            return [self._detect_single(t) for t in text]
+        return self._detect_single(text)
 
-        # Determine label based on threshold
+    def _detect_single(self, text: str) -> Dict:
+        """Detect single text."""
+        prob, criterion, num_tokens = self.glimpse.compute_prob(text)
         label = 1 if prob >= self.threshold else 0
 
-        # Return standardized result
         return {
             "text": text,
             "label": label,

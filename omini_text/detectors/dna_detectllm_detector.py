@@ -10,7 +10,7 @@ Reference: https://github.com/Xiaoweizhu57/DNA-DetectLLM
 
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Union
 
 from omini_text.detectors import BaseDetector
 
@@ -127,15 +127,15 @@ class DNADetectLLMDetector(BaseDetector):
 
         self.mode = mode
 
-    def detect(self, text: str) -> Dict:
+    def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
         """
-        Detect if text is AI-generated.
+        Detect if text is AI-generated. Supports single text or batch.
 
         Args:
-            text: Input text to analyze
+            text: Input text or list of texts to analyze
 
         Returns:
-            Result dictionary:
+            Result dictionary (single) or list of dictionaries (batch):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
@@ -148,7 +148,12 @@ class DNADetectLLMDetector(BaseDetector):
                 }
             }
         """
-        # Compute DNA-DetectLLM score
+        if isinstance(text, list):
+            return self._detect_batch(text)
+        return self._detect_single(text)
+
+    def _detect_single(self, text: str) -> Dict:
+        """Detect single text."""
         dna_score = self.detector.compute_score(text)
         prediction = self.detector.predict(text)
 
@@ -158,20 +163,10 @@ class DNADetectLLMDetector(BaseDetector):
         if isinstance(prediction, list):
             prediction = prediction[0]
 
-        # Convert to standard format
-        # DNA-DetectLLM: higher score = more human-like
-        # Standard format: higher score = more likely AI
-        # So we invert: ai_score = 1 - dna_score (assuming dna_score is in [0, 1] range)
-        # Since dna_score can be > 1, we use a simple inversion that preserves ordering
         threshold = self.detector.threshold
-
-        # Determine label based on original threshold logic
         # DNA-DetectLLM: score < threshold means AI-generated
         label = 1 if dna_score < threshold else 0
-
-        # For the score field, we want higher = more likely AI
-        # Simply negate: lower dna_score (AI) -> higher ai_score
-        # Use negative of dna_score to preserve ordering (summarize.py only cares about rank)
+        # Negate score: lower dna_score (AI) -> higher ai_score
         ai_score = -dna_score
 
         return {
@@ -185,6 +180,34 @@ class DNADetectLLMDetector(BaseDetector):
                 "prediction": prediction,
             },
         }
+
+    def _detect_batch(self, texts: List[str]) -> List[Dict]:
+        """Detect batch of texts. Uses native batch support from baseline."""
+        # Baseline compute_score and predict accept list directly
+        dna_scores = self.detector.compute_score(texts)
+        predictions = self.detector.predict(texts)
+
+        threshold = self.detector.threshold
+        results = []
+        for text, dna_score, prediction in zip(texts, dna_scores, predictions):
+            label = 1 if dna_score < threshold else 0
+            ai_score = -dna_score
+
+            results.append(
+                {
+                    "text": text[:100] + "..." if len(text) > 100 else text,
+                    "label": label,
+                    "score": float(ai_score),
+                    "metadata": {
+                        "dna_score": float(dna_score),
+                        "threshold": float(threshold),
+                        "mode": self.mode,
+                        "prediction": prediction,
+                    },
+                }
+            )
+
+        return results
 
     def cleanup(self):
         """Release GPU memory by deleting models and clearing CUDA cache."""

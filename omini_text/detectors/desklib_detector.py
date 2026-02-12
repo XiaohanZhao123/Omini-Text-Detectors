@@ -7,7 +7,7 @@ transformer-based supervised classifier with mean pooling.
 Note: Requires torch and transformers libraries to be installed.
 """
 
-from typing import Dict
+from typing import Dict, List, Union
 
 import torch
 import torch.nn as nn
@@ -114,15 +114,15 @@ class DesklibDetector(BaseDetector):
         self.threshold = config.get("threshold", 0.5)
         self.max_length = config.get("max_length", 768)
 
-    def detect(self, text: str) -> Dict:
+    def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
         """
-        Detect if text is AI-generated.
+        Detect if text is AI-generated. Supports single text or batch.
 
         Args:
-            text: Input text to analyze
+            text: Input text or list of texts to analyze
 
         Returns:
-            Result dictionary:
+            Result dictionary (single) or list of dictionaries (batch):
             {
                 'text': str,           # Input text
                 'label': int,          # 0=human, 1=AI-generated
@@ -132,7 +132,12 @@ class DesklibDetector(BaseDetector):
                 }
             }
         """
-        # Tokenize input
+        if isinstance(text, list):
+            return self._detect_batch(text)
+        return self._detect_single(text)
+
+    def _detect_single(self, text: str) -> Dict:
+        """Detect single text."""
         encoded = self.tokenizer(
             text,
             padding="max_length",
@@ -143,22 +148,51 @@ class DesklibDetector(BaseDetector):
         input_ids = encoded["input_ids"].to(self.device)
         attention_mask = encoded["attention_mask"].to(self.device)
 
-        # Run inference
         with torch.no_grad():
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
             logits = outputs["logits"]
             probability = torch.sigmoid(logits).item()
 
-        # Determine label based on threshold
         label = 1 if probability >= self.threshold else 0
 
-        # Return standardized result
         return {
             "text": text,
             "label": label,
             "score": float(probability),
             "metadata": {"num_tokens": len(text.split())},
         }
+
+    def _detect_batch(self, texts: List[str]) -> List[Dict]:
+        """Detect batch of texts."""
+        encoded = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs["logits"]
+            probabilities = torch.sigmoid(logits).squeeze(-1).cpu().numpy()
+
+        results = []
+        for text, prob in zip(texts, probabilities):
+            prob = float(prob)
+            label = 1 if prob >= self.threshold else 0
+            results.append(
+                {
+                    "text": text,
+                    "label": label,
+                    "score": prob,
+                    "metadata": {"num_tokens": len(text.split())},
+                }
+            )
+
+        return results
 
     def cleanup(self):
         """Release GPU memory by deleting model and clearing CUDA cache."""

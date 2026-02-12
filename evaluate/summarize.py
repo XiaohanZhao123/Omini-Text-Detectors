@@ -19,9 +19,11 @@ import numpy as np
 
 # Length bucket boundaries (in tokens)
 LENGTH_BUCKETS = [
-    (0, 200, "short"),
-    (200, 500, "medium"),
-    (500, float("inf"), "long"),
+    (0, 50, "very_short"),
+    (50, 150, "short"),
+    (150, 300, "medium"),
+    (300, 500, "long"),
+    (500, float("inf"), "very_long"),
 ]
 
 
@@ -645,6 +647,10 @@ DATASET_DISPLAY_NAMES = {
     "education": "Education",
     "enron": "Enron Email",
     "privacy": "Privacy Policy",
+    "raid": "RAID",
+    "raid_train": "RAID Train",
+    "detectrl": "DetectRL",
+    "m4": "M4",
 }
 
 # Display names for tasks
@@ -658,9 +664,11 @@ TASK_DISPLAY_NAMES = {
 
 # Display names for length buckets
 LENGTH_DISPLAY_NAMES = {
-    "short": "Short\n(0-200)",
-    "medium": "Medium\n(200-500)",
-    "long": "Long\n(500+)",
+    "very_short": "Very Short\n(0-50)",
+    "short": "Short\n(50-150)",
+    "medium": "Medium\n(150-300)",
+    "long": "Long\n(300-500)",
+    "very_long": "Very Long\n(500+)",
 }
 
 # Display names for AI models
@@ -748,7 +756,7 @@ def get_publication_colors():
     }
 
 
-def generate_figures(output_dir: Path, all_data: Dict):
+def generate_figures(output_dir: Path, all_data: Dict, all_tpr_at_fpr: Dict = None):
     """Generate all figures for the evaluation results."""
     try:
         import matplotlib.pyplot as plt
@@ -765,9 +773,18 @@ def generate_figures(output_dir: Path, all_data: Dict):
 
     for dataset, data in all_data.items():
         _generate_dataset_figures(fig_dir, dataset, data, colors)
+        # Generate TPR@FPR line plot if data available
+        if all_tpr_at_fpr and dataset in all_tpr_at_fpr:
+            _generate_tpr_at_fpr_figure(
+                fig_dir, dataset, all_tpr_at_fpr[dataset], colors
+            )
 
     # Generate cross-dataset comparison
     _generate_overall_comparison(fig_dir, all_data, colors)
+
+    # Generate overall TPR@FPR comparison
+    if all_tpr_at_fpr:
+        _generate_overall_tpr_at_fpr_figure(fig_dir, all_tpr_at_fpr, colors)
 
     print(f"  Figures saved to: {fig_dir}")
 
@@ -802,7 +819,7 @@ def _generate_dataset_figures(
     ax.set_ylabel("Accuracy (%)", fontweight="medium")
     ax.set_title(f"{dataset_display}", fontweight="bold", pad=15)
     ax.set_xticks(x)
-    ax.set_xticklabels(detector_labels, rotation=0, ha="center")
+    ax.set_xticklabels(detector_labels, rotation=45, ha="right")
     ax.set_ylim(0, 105)
 
     # Add value labels on bars
@@ -875,7 +892,7 @@ def _generate_dataset_figures(
         f"{dataset_display}: Detection Accuracy by Text Type", fontweight="bold", pad=15
     )
     ax.set_xticks(x)
-    ax.set_xticklabels(detector_labels, rotation=0, ha="center")
+    ax.set_xticklabels(detector_labels, rotation=45, ha="right")
     ax.set_ylim(0, 110)
     ax.legend(loc="upper right", framealpha=0.95)
 
@@ -1137,7 +1154,7 @@ def _generate_breakdown_figure(
 
     # Sort groups appropriately
     if breakdown_type == "length":
-        order = ["short", "medium", "long"]
+        order = ["very_short", "short", "medium", "long", "very_long"]
         groups = [g for g in order if g in all_groups]
     else:
         groups = sorted(all_groups)
@@ -1358,6 +1375,208 @@ def _generate_overall_comparison(
     plt.close()
 
 
+def _generate_tpr_at_fpr_figure(
+    fig_dir: Path,
+    dataset: str,
+    tpr_at_fpr_data: Dict[str, Dict],
+    colors: Dict[str, str],
+):
+    """Generate publication-quality TPR@FPR line plot with markers for a single dataset."""
+    import matplotlib.pyplot as plt
+
+    detectors = list(tpr_at_fpr_data.keys())
+    if not detectors:
+        return
+
+    dataset_display = get_display_name(dataset, "dataset")
+
+    # FPR levels (x-axis)
+    fpr_levels = [1, 5, 10]
+    fpr_keys = ["fpr_0.01", "fpr_0.05", "fpr_0.10"]
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Line styles and markers for variety
+    markers = ["o", "s", "^", "D", "v", "p", "h", "*"]
+    linestyles = ["-", "-", "-", "-", "-", "-", "-", "-"]
+
+    for i, detector in enumerate(detectors):
+        tpr_values = []
+        for fpr_key in fpr_keys:
+            if fpr_key in tpr_at_fpr_data[detector]:
+                tpr_values.append(tpr_at_fpr_data[detector][fpr_key]["tpr"])
+            else:
+                tpr_values.append(0)
+
+        color = colors.get(detector, "#666666")
+        marker = markers[i % len(markers)]
+        linestyle = linestyles[i % len(linestyles)]
+
+        ax.plot(
+            fpr_levels,
+            tpr_values,
+            marker=marker,
+            markersize=10,
+            linewidth=2.5,
+            linestyle=linestyle,
+            color=color,
+            label=get_display_name(detector, "detector"),
+            markeredgecolor="white",
+            markeredgewidth=1.5,
+        )
+
+    ax.set_xlabel("False Positive Rate (%)", fontweight="medium", fontsize=13)
+    ax.set_ylabel("True Positive Rate (%)", fontweight="medium", fontsize=13)
+    ax.set_title(
+        f"{dataset_display}: TPR at Fixed FPR Levels",
+        fontweight="bold",
+        pad=15,
+        fontsize=14,
+    )
+
+    ax.set_xticks(fpr_levels)
+    ax.set_xticklabels(["1%", "5%", "10%"], fontsize=12)
+    ax.set_xlim(0, 11)
+    ax.set_ylim(0, 105)
+
+    # Grid
+    ax.yaxis.grid(True, linestyle="--", alpha=0.3, zorder=0)
+    ax.xaxis.grid(True, linestyle="--", alpha=0.3, zorder=0)
+    ax.set_axisbelow(True)
+
+    # Legend outside plot
+    ax.legend(
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+        framealpha=0.95,
+        fontsize=11,
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        fig_dir / f"{dataset}_tpr_at_fpr.png",
+        dpi=300,
+        bbox_inches="tight",
+        facecolor="white",
+        edgecolor="none",
+    )
+    plt.savefig(
+        fig_dir / f"{dataset}_tpr_at_fpr.pdf",
+        bbox_inches="tight",
+        facecolor="white",
+        edgecolor="none",
+    )
+    plt.close()
+
+
+def _generate_overall_tpr_at_fpr_figure(
+    fig_dir: Path,
+    all_tpr_at_fpr: Dict[str, Dict[str, Dict]],
+    colors: Dict[str, str],
+):
+    """Generate publication-quality overall TPR@FPR comparison across datasets."""
+    import matplotlib.pyplot as plt
+
+    datasets = list(all_tpr_at_fpr.keys())
+    if not datasets:
+        return
+
+    # Get all detectors
+    all_detectors = set()
+    for dataset_data in all_tpr_at_fpr.values():
+        all_detectors.update(dataset_data.keys())
+    detectors = sorted(all_detectors)
+
+    # Create subplots for each dataset
+    n_datasets = len(datasets)
+    fig, axes = plt.subplots(1, n_datasets, figsize=(6 * n_datasets, 5), sharey=True)
+    if n_datasets == 1:
+        axes = [axes]
+
+    fpr_levels = [1, 5, 10]
+    fpr_keys = ["fpr_0.01", "fpr_0.05", "fpr_0.10"]
+    markers = ["o", "s", "^", "D", "v", "p", "h", "*"]
+
+    for ax_idx, (ax, dataset) in enumerate(zip(axes, datasets)):
+        dataset_display = get_display_name(dataset, "dataset")
+        tpr_at_fpr_data = all_tpr_at_fpr[dataset]
+
+        for i, detector in enumerate(detectors):
+            if detector not in tpr_at_fpr_data:
+                continue
+
+            tpr_values = []
+            for fpr_key in fpr_keys:
+                if fpr_key in tpr_at_fpr_data[detector]:
+                    tpr_values.append(tpr_at_fpr_data[detector][fpr_key]["tpr"])
+                else:
+                    tpr_values.append(0)
+
+            color = colors.get(detector, "#666666")
+            marker = markers[i % len(markers)]
+
+            ax.plot(
+                fpr_levels,
+                tpr_values,
+                marker=marker,
+                markersize=9,
+                linewidth=2.2,
+                color=color,
+                label=get_display_name(detector, "detector") if ax_idx == 0 else "",
+                markeredgecolor="white",
+                markeredgewidth=1.2,
+            )
+
+        ax.set_xlabel("FPR (%)", fontweight="medium", fontsize=12)
+        if ax_idx == 0:
+            ax.set_ylabel("TPR (%)", fontweight="medium", fontsize=12)
+        ax.set_title(dataset_display, fontweight="bold", fontsize=13)
+
+        ax.set_xticks(fpr_levels)
+        ax.set_xticklabels(["1%", "5%", "10%"], fontsize=11)
+        ax.set_xlim(0, 11)
+        ax.set_ylim(0, 105)
+
+        ax.yaxis.grid(True, linestyle="--", alpha=0.3, zorder=0)
+        ax.xaxis.grid(True, linestyle="--", alpha=0.3, zorder=0)
+        ax.set_axisbelow(True)
+
+    # Single legend for all subplots
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        bbox_to_anchor=(0.5, -0.02),
+        loc="upper center",
+        ncol=min(4, len(detectors)),
+        framealpha=0.95,
+        fontsize=11,
+    )
+
+    fig.suptitle(
+        "TPR at Fixed FPR Levels Across Datasets",
+        fontweight="bold",
+        fontsize=15,
+        y=1.02,
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        fig_dir / "overall_tpr_at_fpr.png",
+        dpi=300,
+        bbox_inches="tight",
+        facecolor="white",
+        edgecolor="none",
+    )
+    plt.savefig(
+        fig_dir / "overall_tpr_at_fpr.pdf",
+        bbox_inches="tight",
+        facecolor="white",
+        edgecolor="none",
+    )
+    plt.close()
+
+
 # =============================================================================
 # Main Functions
 # =============================================================================
@@ -1455,16 +1674,24 @@ def main():
     output_dir = Path(args.output_dir) if args.output_dir else run_dir / "summary"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load profile log
+    # Load profile log and discover all dataset directories
     profile_log_path = run_dir / "profile_log.json"
     if profile_log_path.exists():
         with open(profile_log_path) as f:
             profile_log = json.load(f)
-        datasets = profile_log.get("datasets", [])
+        datasets_from_log = set(profile_log.get("datasets", []))
     else:
-        datasets = [
-            d.name for d in run_dir.iterdir() if d.is_dir() and d.name != "summary"
-        ]
+        datasets_from_log = set()
+
+    # Discover all dataset directories (includes raid, raid_train, etc.)
+    datasets_from_dirs = {
+        d.name
+        for d in run_dir.iterdir()
+        if d.is_dir() and d.name != "summary" and any(d.glob("*.jsonl"))
+    }
+
+    # Merge both sources
+    datasets = sorted(datasets_from_log | datasets_from_dirs)
 
     # Collect all data
     all_metrics = {}
@@ -1558,7 +1785,7 @@ def main():
     # Generate figures
     if not args.no_figures:
         print("\nGenerating figures...")
-        generate_figures(output_dir, all_data)
+        generate_figures(output_dir, all_data, all_tpr_at_fpr)
 
     # Log to wandb if requested
     if args.wandb:

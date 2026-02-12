@@ -63,6 +63,19 @@ Detect AI-generated text.
 - Returns same cardinality as input
 - Preserves input order for lists
 
+**Batch Processing Support:**
+
+| Detector | Native Batch | Notes |
+|----------|--------------|-------|
+| e5-small | ✅ Yes | HuggingFace pipeline batches internally |
+| binoculars | ✅ Yes | Native batch in `compute_score()` |
+| radar | ✅ Yes | Tokenizer + model batch support |
+| ood-llm-detect | ✅ Yes | Tokenizer + model batch support |
+| desklib | ✅ Yes | Tokenizer + model batch support |
+| dna-detectllm | ✅ Yes | Native batch in baseline |
+| fast-detectgpt | ❌ Sequential | Baseline processes single text |
+| glimpse | ❌ Sequential | API-bound, no speedup from batching |
+
 ---
 
 ## Return Format
