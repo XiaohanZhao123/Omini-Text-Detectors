@@ -186,6 +186,76 @@ Each record produces 2 evaluation records:
 | Enron | `original_body` | `generated` | `task` field | filename |
 | Privacy | `original_text` | `generated` | `task` field | filename |
 
+---
+
+## Dataset 4: AES Chains Sentences
+
+**Loader name**: `aes_chains_sentences`
+**File**: `data/aes_chains_pilot.jsonl`
+**Records**: 156 documents, 4 versions each (v0-v3)
+**Output**: 6,832 sentences (3,520 human, 3,312 AI)
+
+Sentence-level classification dataset derived from the AES Chains multi-round editing data. Each document version is split into sentences, and each sentence is labeled based on its AI token ratio.
+
+### Source Schema
+
+```json
+{
+    "q_id": "string",
+    "domain": "string (e.g. essay)",
+    "history": [
+        {
+            "version_id": "v0",
+            "edited_by": "human",
+            "operation": "original_draft",
+            "text": "string",
+            "token_labels": ["human", "human", "ai", ...]
+        }
+    ]
+}
+```
+
+`token_labels` aligns 1:1 with whitespace-split words in `text`.
+
+### Sentence Labeling
+
+| AI token ratio | Label | Description |
+|----------------|-------|-------------|
+| 0% | 0 (human) | Pure human sentence |
+| >50% | 1 (AI) | Majority AI sentence |
+| 0-50% | dropped | Ambiguous, excluded |
+
+### Version Breakdown
+
+| Version | Operation | Total Sents | Human | AI | Dropped |
+|---------|-----------|-------------|-------|----|---------|
+| v0 | original_draft | 2,735 | 2,735 | 0 | 0 |
+| v1 | ai_polish_light | 2,751 | 549 | 686 | 1,516 |
+| v2 | ai_rewrite_span | 2,433 | 188 | 1,284 | 961 |
+| v3 | ai_polish_strong | 2,070 | 48 | 1,342 | 680 |
+
+### EvalRecord Mapping
+
+| Field | Value |
+|-------|-------|
+| `text` | Sentence text |
+| `ground_truth_label` | 0 or 1 |
+| `text_field` | `"{version}_s{sentence_idx}"` (e.g. `v1_s3`) |
+| `task` | `"aes_sent_{version}"` (e.g. `aes_sent_v2`) |
+| `ai_model` | Operation name for AI sentences, `null` for human |
+| `domain` | From document (e.g. `essay`) |
+
+### Usage
+
+```python
+from evaluate.data_loader import load_dataset
+records = list(load_dataset("aes_chains_sentences", data_dir="data/"))
+```
+
+The `ai_threshold` parameter (default 0.5) can be adjusted via kwargs.
+
+---
+
 ## Total Records After Flattening
 
 | Dataset | Original Records | Flattened Records | Human | AI |
