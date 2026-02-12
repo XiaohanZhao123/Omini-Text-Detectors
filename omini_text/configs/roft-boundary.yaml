@@ -1,0 +1,134 @@
+# RoFT Boundary Detector (Training-free AI-text boundary detection)
+# Detects the boundary between human-written and AI-generated text
+# Paper: https://arxiv.org/abs/2311.08349
+# GitHub: https://github.com/silversolver/ai_boundary_detection
+#
+# =============================================================================
+# KEY FEATURE: TRAINING-FREE
+# =============================================================================
+# This detector does NOT require any pretrained weights!
+# It uses perplexity patterns from off-the-shelf language models to detect
+# where AI-generated content begins in a document.
+#
+# Ideal for:
+# - Quick deployment without training data
+# - Detecting human→AI transition points
+# - Documents with clear sentence boundaries
+# =============================================================================
+
+model: roft-boundary
+
+# Language Model for NLL Computation
+# This model is used to compute perplexity (negative log-likelihood) for each sentence.
+# Smaller models are faster but may be less accurate.
+#
+# Options:
+#   - gpt2 (default, ~500MB, fast)
+#   - gpt2-medium (~1.5GB)
+#   - gpt2-large (~3GB)
+#   - gpt2-xl (~6GB)
+#   - microsoft/phi-2 (~5GB, better quality)
+model_name: gpt2
+
+# Boundary Detection Method
+# Different algorithms for finding the human→AI transition point.
+#
+# Options:
+#   - gradient_smooth (default, recommended): Smoothed NLL gradient
+#   - gradient: Raw NLL gradient (find steepest drop)
+#   - two_means: Minimize within-group variance
+#   - mean_diff: Maximize between-group mean difference
+#   - cusum: Change point detection using cumulative sum
+#
+# Performance (on RoFT dataset, 50 samples):
+#   gradient_smooth: 18% exact, 42% ±1 sentence
+#   two_means: 14% exact, 38% ±1 sentence
+#   gradient: 12% exact, 30% ±1 sentence
+method: gradient_smooth
+
+# Smoothing Window Size
+# Only used with method=gradient_smooth
+# Larger values = more smoothing, may miss sharp transitions
+window_size: 3
+
+# Sentence Separator
+# The delimiter used to split text into sentences.
+# The RoFT dataset uses "_SEP_" as the separator.
+# For natural text, sentences are split by .!? followed by whitespace.
+sentence_separator: "_SEP_"
+
+# Maximum Sentences
+# Maximum number of sentences to process per document.
+# Set higher for longer documents, but increases computation time.
+max_sentences: 20
+
+# Device Settings
+# Options: "auto" (recommended), "cuda", "cuda:0", "cpu"
+device: auto
+
+# HuggingFace Cache Directory
+# Set to a path to cache downloaded models, or null to use default
+cache_dir: null
+
+# =============================================================================
+# Performance Notes
+# =============================================================================
+# GPU Memory: ~1-2GB with GPT-2, ~5-6GB with larger models
+# Speed: ~0.5-2s per text (depends on text length and model size)
+# CPU: Supported but slower (~5-10x)
+#
+# Accuracy Expectations (training-free baseline):
+#   Exact match: ~15-20%
+#   Within ±1 sentence: ~35-45%
+#   Within ±2 sentences: ~50-60%
+#
+# Random baseline: ~11% (for 10-sentence documents)
+#
+# For higher accuracy, consider:
+#   - GigaCheck (supervised, ~80%+ accuracy)
+#   - SeqXGPT (supervised, requires training)
+
+# =============================================================================
+# How It Works
+# =============================================================================
+# 1. Split text into sentences (by separator or punctuation)
+# 2. Compute NLL for each sentence using the language model
+# 3. Apply boundary detection algorithm to find transition point
+# 4. Return AI intervals (everything after boundary)
+#
+# Key insight: AI-generated text often has lower perplexity (NLL) than human
+# text because LLMs generate "likely" tokens. The boundary is where NLL drops.
+
+# =============================================================================
+# Output Format (matches GigaCheck/SeqXGPT for compatibility)
+# =============================================================================
+# {
+#   "text": str,           # Input text
+#   "label": 0/1,          # 0=human, 1=AI (any AI content)
+#   "score": float,        # AI content coverage ratio (0.0-1.0)
+#   "metadata": {
+#     "model": "roft-boundary-gpt2",
+#     "method": "gradient_smooth",
+#     "pred_label": "human"/"ai"/"mixed",
+#     "ai_intervals": [[start, end], ...],  # Character positions
+#     "boundary_index": int,  # Sentence index where AI starts
+#     "boundary_char_pos": int,  # Character position of boundary
+#     "sentence_nlls": [...],  # NLL per sentence (for debugging)
+#   }
+# }
+
+# =============================================================================
+# Usage Example
+# =============================================================================
+# from omini_text import pipeline
+#
+# # Basic usage
+# pipe = pipeline("ai-text-detection", model="roft-boundary")
+# result = pipe("Human written text._SEP_AI generated continuation here.")
+#
+# # With custom settings
+# pipe = pipeline("ai-text-detection", model="roft-boundary",
+#                 model_name="gpt2-medium", method="two_means")
+#
+# print(result['metadata']['boundary_index'])  # Sentence where AI starts
+# print(result['metadata']['ai_intervals'])    # [[char_start, char_end]]

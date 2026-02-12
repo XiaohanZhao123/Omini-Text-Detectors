@@ -121,3 +121,11 @@ xxhash==3.5.0
 yapf==0.43.0
 yarl==1.20.1
 zipp==3.23.0
+intervaltree
+loguru
+dacite
+fastNLP
+# DAMASHA dependencies
+pytorch-crf
+textstat
+nltk

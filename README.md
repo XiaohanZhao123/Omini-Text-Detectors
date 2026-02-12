@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A unified interface for 6 state-of-the-art AI text detection methods, spanning zero-shot and supervised approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+A unified interface for 9 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
 
 ## Quick Start
 
@@ -52,14 +52,19 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 
 ## Available Detectors
 
-| Detector | Type | Venue | Key Feature | Hardware |
-|----------|------|-------|-------------|----------|
-| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU |
-| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU |
-| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU |
-| [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) |
-| [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) |
-| [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API |
+| Detector | Type | Venue | Key Feature | Hardware | Pretrained |
+|----------|------|-------|-------------|----------|------------|
+| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU | ✅ |
+| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU | ✅ |
+| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU | ✅ |
+| [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) | ✅ |
+| [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) | ✅ |
+| [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API | ✅ |
+| [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection (official) | GPU (~14GB) | ✅ |
+| [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES (reproduction) | GPU (~28GB) | ✅* |
+| [RoFT](#roft-boundary) | Boundary | arXiv 2023 | Training-free NLL boundary | GPU (~1-2GB) | ✅ |
+
+*SeqXGPT requires training but we provide pretrained checkpoint at `zcahjl3/seqxgpt-detector`
 
 ### Supervised Methods (trained on AI text)
 
@@ -118,6 +123,129 @@ ICLR 2025. Bridges white-box detection with proprietary LLMs (GPT-4, Claude, Gem
 ```python
 pipe = pipeline("ai-text-detection", model="glimpse")
 ```
+
+### Boundary Detection (character-level segmentation)
+
+These methods detect **where** AI-generated content appears within a document, returning character-level intervals.
+
+**Input:** Plain text string (or list for batch processing)
+**Output:** `ai_intervals` with `[start_char, end_char]` positions
+
+#### GigaCheck
+[[Paper](https://arxiv.org/abs/2410.23728)] [[Code](https://github.com/ai-forever/gigacheck)] [[Model](https://huggingface.co/iitolstykh/GigaCheck-Detector-Multi)]
+
+arXiv 2024. Mistral-7B + DETR for detecting AI-written character intervals in mixed human/AI text. Uses official pretrained weights from HuggingFace - **no training required**.
+
+**~14GB VRAM** | **Pretrained**
+
+```python
+pipe = pipeline("ai-text-detection", model="gigacheck", device="cuda:0")
+
+text = "I went to the coffee shop yesterday. The implementation of transformer architectures revolutionized NLP."
+result = pipe(text)
+
+print(result["label"])                    # 1 (AI detected)
+print(result["score"])                    # 0.68 (AI content ratio)
+print(result["metadata"]["pred_label"])   # "mixed"
+print(result["metadata"]["ai_intervals"]) # [[65, 203]] - character positions
+# Extract AI-generated portion:
+for start, end in result["metadata"]["ai_intervals"]:
+    print(f"AI text: {text[start:end]}")
+```
+
+#### SeqXGPT
+[[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)] [[Checkpoint](https://huggingface.co/zcahjl3/seqxgpt-detector)]
+
+EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. We provide pretrained checkpoint.
+
+**~28GB VRAM** (4 models, distribute with `feature_devices`)
+
+```python
+pipe = pipeline(
+    "ai-text-detection",
+    model="seqxgpt",
+    device="cuda:0",
+    feature_devices=['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']  # Distribute 4 models
+)
+
+text = "I went to the coffee shop. The transformer architecture enables parallel computation."
+result = pipe(text)
+
+print(result["label"])                         # 0 or 1
+print(result["metadata"]["pred_label"])        # "human", "ai", or "mixed"
+print(result["metadata"]["ai_intervals"])      # [[start, end], ...] character positions
+print(result["metadata"]["words"][:5])         # ['I', 'went', 'to', 'the', 'coffee']
+print(result["metadata"]["word_predictions"][:5])  # ['B-human', 'M-human', ...]
+```
+
+#### RoFT Boundary
+[[Paper](https://arxiv.org/abs/2311.08349)] [[Code](https://github.com/silversolver/ai_boundary_detection)]
+
+arXiv 2023. **Training-free** boundary detection using perplexity (NLL) patterns. Detects the transition point where human text ends and AI-generated text begins. No pretrained weights required - uses off-the-shelf LMs (GPT-2).
+
+**~1-2GB VRAM** | **Training-free** | Detects single human→AI transition
+
+```python
+pipe = pipeline("ai-text-detection", model="roft-boundary", device="cuda:0")
+
+# Use _SEP_ to mark sentence boundaries (optional - auto-splits on .!?)
+text = "I went to the coffee shop._SEP_The transformer architecture enables parallel computation._SEP_Machine learning is powerful."
+result = pipe(text)
+
+print(result["label"])                         # 1 (AI detected)
+print(result["score"])                         # 0.34 (AI content ratio)
+print(result["metadata"]["boundary_index"])    # 2 (AI starts at sentence 2)
+print(result["metadata"]["ai_intervals"])      # [[113, 172]] character positions
+print(result["metadata"]["sentence_nlls"])     # [3.90, 7.20, 4.68] NLL per sentence
+```
+
+#### Boundary Detection Output Format
+
+All three boundary detectors return character-level AI intervals in a unified format:
+
+```python
+{
+    "text": str,           # Input text
+    "label": int,          # 0=human, 1=AI (binary: any AI content)
+    "score": float,        # AI content coverage ratio (0.0-1.0)
+    "metadata": {
+        "pred_label": str,              # "human", "ai", or "mixed"
+        "ai_intervals": [[start, end], ...],  # Character positions of AI-written spans
+        # GigaCheck-specific:
+        "classification_head_probs": [float, ...],  # Class probabilities
+        # SeqXGPT-specific:
+        "predictions": [str, ...],      # Per-word BIOES labels (6-class source attribution)
+        "words": [str, ...],            # Tokenized words
+        "word_positions": [(int, int), ...]  # Word char positions
+        # RoFT-specific:
+        "boundary_index": int,          # Sentence index where AI starts
+        "boundary_char_pos": int,       # Character position of boundary
+        "sentence_nlls": [float, ...]   # NLL per sentence (for debugging)
+    }
+}
+```
+
+**Converting Intervals to Word Labels:**
+
+GigaCheck can convert its character intervals to word-level labels for comparison with SeqXGPT:
+
+```python
+from omini_text.detectors import GigacheckDetector
+
+detector = GigacheckDetector({"device": "cuda:0"})
+result = detector.detect_with_word_labels("Human intro. AI generated text.")
+# result["word_labels"] = ['human', 'human', 'ai', 'ai', 'ai']
+# result["words"] = ['Human', 'intro.', 'AI', 'generated', 'text.']
+```
+
+| Feature | GigaCheck | SeqXGPT | RoFT |
+|---------|-----------|---------|------|
+| Output | Character intervals | Word BIOES + char intervals | Sentence boundary + char intervals |
+| Source Attribution | No (ai/human) | Yes (gpt2, gptneo, gptj, llama, gpt3re, human) | No |
+| Multi-boundary | Yes | Yes | No (single human→AI transition) |
+| Training Required | No (pretrained) | Yes (checkpoint provided) | No (training-free) |
+| VRAM | ~14GB | ~28GB (4 models) | ~1-2GB |
+| Speed | ~2-5s/text | ~2-5s/text | ~0.5-2s/text |
 
 ## Usage Examples
 
@@ -191,7 +319,10 @@ Omini-Text/
 │   ├── binoculars/
 │   ├── radar/
 │   ├── e5_small/
-│   └── desklib/
+│   ├── desklib/
+│   ├── gigacheck/
+│   ├── seqxgpt/
+│   └── roft-boundary/
 ├── evaluate/             # Evaluation pipeline
 │   ├── run_profile.py    # Main evaluation script
 │   └── data_loader.py    # Dataset loading utilities
@@ -240,6 +371,27 @@ Omini-Text/
   author={Hans, Abhimanyu and Schwarzschild, Avi and Ramber, Valeriia and Pirber, Tonmoy and Goldblum, Micah and Goldstein, Tom},
   booktitle={ICML},
   year={2024}
+}
+
+@article{gigacheck2024,
+  title={GigaCheck: Detecting LLM-generated Content},
+  author={Tolstykh, Ivan and others},
+  journal={arXiv preprint arXiv:2410.23728},
+  year={2024}
+}
+
+@inproceedings{seqxgpt2023,
+  title={SeqXGPT: Sentence-Level AI-Generated Text Detection},
+  author={Wang, Pengyu and Li, Linyang and Ren, Ke and Jiang, Botian and Zhang, Dong and Qiu, Xipeng},
+  booktitle={EMNLP},
+  year={2023}
+}
+
+@article{roft2023,
+  title={AI-generated text boundary detection with RoFT},
+  author={Kushnareva, Laida and Gaintseva, Tatiana and Magai, German and others},
+  journal={arXiv preprint arXiv:2311.08349},
+  year={2023}
 }
 ```
 
