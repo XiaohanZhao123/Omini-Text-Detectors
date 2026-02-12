@@ -4,6 +4,7 @@ Loads and flattens datasets into EvalRecord format for detector evaluation.
 """
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -23,6 +24,7 @@ DATASETS = [
     "turingbench",   # TuringBench (EMNLP 2021)
     # Multi-round AI-human editing chains
     "aes_chains",    # AES Chains: progressive AI editing (v0=human, v1-v3=AI-edited)
+    "aes_chains_sentences",  # AES Chains sentence-level: per-sentence classification
 ]
 
 
@@ -71,6 +73,8 @@ def load_dataset(name: str, data_dir: str = "data/", **kwargs) -> Iterator[EvalR
         yield from _load_turingbench(data_dir, **kwargs)
     elif name == "aes_chains":
         yield from _load_aes_chains(**kwargs)
+    elif name == "aes_chains_sentences":
+        yield from _load_aes_chains_sentences(data_dir, **kwargs)
     else:
         raise ValueError(f"Unknown dataset: {name}. Must be one of {DATASETS}")
 
@@ -604,6 +608,107 @@ def _load_aes_chains(
                     task=f"aes_{ver}",
                     ai_model=vn["operation"],
                 )
+
+
+def _split_sentences_with_labels(words, labels):
+    """Split words into sentences while tracking per-word labels.
+
+    Uses punctuation (.?!) followed by an uppercase word as sentence boundary.
+
+    Returns:
+        List of (sentence_words, sentence_labels) tuples.
+    """
+    sentences = []
+    sw, sl = [], []
+    for i, (word, label) in enumerate(zip(words, labels)):
+        sw.append(word)
+        sl.append(label)
+        if re.search(r'[.?!]["\')\]]?$', word):
+            is_end = i == len(words) - 1
+            if not is_end:
+                is_end = bool(re.match(r'^["\']?[A-Z]', words[i + 1]))
+            if is_end:
+                sentences.append((sw, sl))
+                sw, sl = [], []
+    if sw:
+        sentences.append((sw, sl))
+    return sentences
+
+
+def _load_aes_chains_sentences(
+    data_dir: str,
+    data_path: str = None,
+    ai_threshold: float = 0.5,
+) -> Iterator[EvalRecord]:
+    """Load AES Chains as sentence-level classification records.
+
+    Splits each document version into sentences, labels each sentence based
+    on the proportion of AI tokens it contains.
+
+    Labeling rules:
+    - 0% AI tokens -> human (label=0)
+    - >ai_threshold AI tokens -> AI (label=1)
+    - Otherwise -> dropped (ambiguous)
+
+    Args:
+        data_dir: Base data directory
+        data_path: Override path to the JSONL file. If None, uses
+            data_dir/aes_chains_pilot.jsonl
+        ai_threshold: Fraction of AI tokens above which a sentence is
+            labeled as AI. Default 0.5.
+
+    Yields:
+        EvalRecord for each usable sentence.
+    """
+    if data_path is None:
+        path = Path(data_dir) / "aes_chains_pilot.jsonl"
+    else:
+        path = Path(data_path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"AES chains data not found at {path}")
+
+    with open(path) as f:
+        for doc_idx, line in enumerate(f):
+            doc = json.loads(line)
+            q_id = doc["q_id"]
+            domain = doc["domain"]
+            version_map = {v["version_id"]: v for v in doc["history"]}
+
+            for vid in ["v0", "v1", "v2", "v3"]:
+                if vid not in version_map:
+                    continue
+                v = version_map[vid]
+                words = v["text"].split()
+                labels = v["token_labels"]
+                if len(words) != len(labels):
+                    continue
+
+                sentences = _split_sentences_with_labels(words, labels)
+
+                for sent_idx, (sent_words, sent_labels) in enumerate(sentences):
+                    ai_count = sent_labels.count("ai")
+                    total = len(sent_labels)
+                    ai_ratio = ai_count / total
+
+                    # Only keep pure human or clearly AI sentences
+                    if ai_ratio == 0:
+                        ground_truth = 0
+                    elif ai_ratio > ai_threshold:
+                        ground_truth = 1
+                    else:
+                        continue  # drop ambiguous
+
+                    yield EvalRecord(
+                        text=" ".join(sent_words),
+                        ground_truth_label=ground_truth,
+                        source_file=str(path),
+                        line_index=doc_idx,
+                        text_field=f"{vid}_s{sent_idx}",
+                        domain=domain,
+                        task=f"aes_sent_{vid}",
+                        ai_model=v["operation"] if ground_truth == 1 else None,
+                    )
 
 
 if __name__ == "__main__":
