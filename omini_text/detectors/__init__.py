@@ -52,18 +52,30 @@ class BaseDetector(ABC):
         pass
 
 
-# Import detector implementations
-from omini_text.detectors.binoculars_detector import BinocularsDetector
-from omini_text.detectors.desklib_detector import DesklibDetector
-from omini_text.detectors.dna_detectllm_detector import DNADetectLLMDetector
-from omini_text.detectors.e5_small_detector import E5SmallDetector
-from omini_text.detectors.gigacheck_detector import GigacheckDetector
-from omini_text.detectors.glimpse_detector import GlimpseDetector
-from omini_text.detectors.ood_llm_detector import OODLLMDetector
-from omini_text.detectors.radar_detector import RADARDetector
-from omini_text.detectors.roft_boundary_detector import RoFTBoundaryDetector
-from omini_text.detectors.seqxgpt_detector import SeqXGPTDetector
-from omini_text.detectors.damasha_detector import DAMASHADetector
+# Lazy imports — detectors depend on baseline submodules that may not be installed.
+# Each detector is only imported when actually accessed, so missing dependencies
+# only cause errors for detectors you try to use.
+def __getattr__(name):
+    _lazy_imports = {
+        "BinocularsDetector": "omini_text.detectors.binoculars_detector",
+        "DesklibDetector": "omini_text.detectors.desklib_detector",
+        "DNADetectLLMDetector": "omini_text.detectors.dna_detectllm_detector",
+        "E5SmallDetector": "omini_text.detectors.e5_small_detector",
+        "GigacheckDetector": "omini_text.detectors.gigacheck_detector",
+        "GlimpseDetector": "omini_text.detectors.glimpse_detector",
+        "OODLLMDetector": "omini_text.detectors.ood_llm_detector",
+        "RADARDetector": "omini_text.detectors.radar_detector",
+        "RoFTBoundaryDetector": "omini_text.detectors.roft_boundary_detector",
+        "SeqXGPTDetector": "omini_text.detectors.seqxgpt_detector",
+        "DAMASHADetector": "omini_text.detectors.damasha_detector",
+        "ShortPHDDetector": "omini_text.detectors.short_phd_detector",
+        "FastDetectGPTDetector": "omini_text.detectors.fast_detectgpt_detector",
+    }
+    if name in _lazy_imports:
+        import importlib
+        module = importlib.import_module(_lazy_imports[name])
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "BaseDetector",
@@ -78,4 +90,5 @@ __all__ = [
     "SeqXGPTDetector",
     "RoFTBoundaryDetector",
     "DAMASHADetector",
+    "ShortPHDDetector",
 ]

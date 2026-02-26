@@ -25,9 +25,13 @@ class DesklibAIDetectionModel(PreTrainedModel):
     """
 
     config_class = AutoConfig
+    _tied_weights_keys = []
 
     def __init__(self, config):
         super().__init__(config)
+        # Compatibility with transformers>=5.x
+        if not hasattr(self, "all_tied_weights_keys"):
+            self.all_tied_weights_keys = {}
         # Initialize the base transformer model
         self.model = AutoModel.from_config(config)
         # Define a classifier head

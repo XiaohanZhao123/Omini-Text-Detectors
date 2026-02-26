@@ -23,9 +23,6 @@ BASELINE_PATH = Path(__file__).resolve().parent.parent.parent / "baseline" / "gi
 if str(BASELINE_PATH) not in sys.path:
     sys.path.insert(0, str(BASELINE_PATH))
 
-from gigacheck.inference.src.mistral_detector import MistralDetector
-
-
 class GigacheckDetector(BaseDetector):
     """
     GigaCheck detector for AI-generated text segmentation.
@@ -65,6 +62,8 @@ class GigacheckDetector(BaseDetector):
 
     def _load_model(self):
         """Load model from HuggingFace."""
+        from gigacheck.inference.src.mistral_detector import MistralDetector
+
         # Load config to get model parameters
         model_config = AutoConfig.from_pretrained(self.model_path)
 

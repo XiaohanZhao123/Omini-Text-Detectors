@@ -39,7 +39,7 @@ class EvalRecord:
     text_field: str
     domain: str
     task: str
-    ai_model: str | None
+    ai_model: str | None  # fraction of AI tokens (0.0-1.0)
 
 
 def load_dataset(name: str, data_dir: str = "data/", **kwargs) -> Iterator[EvalRecord]:

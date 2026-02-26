@@ -13,7 +13,7 @@ Excludes:
 Usage:
     CUDA_VISIBLE_DEVICES=4,5,6 python run_binary_eval.py \
         --datasets raid hc3 \
-        --output_dir ../results/binary_classification_eval
+        --output_dir results/binary_classification_eval
 """
 
 import argparse
@@ -41,6 +41,7 @@ BINARY_DETECTORS = [
     "dna-detectllm", # Zero-shot, mutation-repair paradigm
     "ood-llm-detect", # OOD-based, DeepSVDD
     "gigacheck",     # Boundary+Classification, has classification head
+    "short-phd",     # Zero-shot, topological PHD with prompt augmentation
 ]
 
 # Benchmark datasets
@@ -66,7 +67,7 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="../results/binary_classification_eval",
+        default="results/binary_classification_eval",
         help="Output directory for results",
     )
     parser.add_argument(
