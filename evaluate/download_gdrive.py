@@ -2,9 +2,9 @@
 """Download evaluation data from Google Drive.
 
 Usage:
-    python download_gdrive.py                              # download Sondos's folder
-    python download_gdrive.py --url "https://drive.google.com/..."  # custom URL
-    python download_gdrive.py --inspect                    # inspect downloaded files
+    python download_gdrive.py "https://drive.google.com/drive/folders/XXXXX"
+    python download_gdrive.py "https://drive.google.com/drive/folders/XXXXX" --output_dir data/external/sondos
+    python download_gdrive.py --inspect                    # inspect already-downloaded files
 
 Requires: pip install gdown
 """
@@ -14,14 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_FOLDER_URL = (
-    "https://drive.google.com/drive/folders/1ll8nBj9OTIrlYPCYB3FGgSAqtKNL9WMq"
-)
 DEFAULT_OUTPUT_DIR = "data/external/sondos"
 
 
-def download(url: str = DEFAULT_FOLDER_URL, output_dir: str = DEFAULT_OUTPUT_DIR):
-    """Download a Google Drive folder."""
+def download(url: str, output_dir: str = DEFAULT_OUTPUT_DIR):
+    """Download a Google Drive folder or file."""
     # Install gdown if needed
     try:
         import gdown
@@ -84,15 +81,21 @@ def inspect(output_dir: str = DEFAULT_OUTPUT_DIR):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--url", default=DEFAULT_FOLDER_URL, help="Google Drive URL")
+    p.add_argument("url", nargs="?", default=None,
+                   help="Google Drive URL (folder or file)")
     p.add_argument("--output_dir", default=DEFAULT_OUTPUT_DIR, help="Output dir")
     p.add_argument("--inspect", action="store_true", help="Only inspect (no download)")
     args = p.parse_args()
 
     if args.inspect:
         inspect(args.output_dir)
-    else:
+    elif args.url:
         download(args.url, args.output_dir)
+    else:
+        print("ERROR: Provide a Google Drive URL as the first argument.")
+        print("  Example: python download_gdrive.py 'https://drive.google.com/drive/folders/XXXXX'")
+        print("  Or use --inspect to view already-downloaded files.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
