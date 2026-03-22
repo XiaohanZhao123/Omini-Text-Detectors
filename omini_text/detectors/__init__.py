@@ -73,6 +73,7 @@ def __getattr__(name):
         "ClaudeDetector": "omini_text.detectors.claude_detector",
         "OpenAIDetector": "omini_text.detectors.openai_detector",
         "GeminiDetector": "omini_text.detectors.gemini_detector",
+        "GenAISentenceDetector": "omini_text.detectors.genai_sentence_detector",
     }
     if name in _lazy_imports:
         import importlib
@@ -97,4 +98,5 @@ __all__ = [
     "ClaudeDetector",
     "OpenAIDetector",
     "GeminiDetector",
+    "GenAISentenceDetector",
 ]

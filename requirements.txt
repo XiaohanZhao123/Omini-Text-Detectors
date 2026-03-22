@@ -127,6 +127,7 @@ dacite
 fastNLP
 # DAMASHA dependencies
 pytorch-crf
+torchcrf
 textstat
 nltk
 # LLM-as-Judge detectors

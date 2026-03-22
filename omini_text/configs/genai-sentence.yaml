@@ -1,0 +1,44 @@
+# GenAI Sentence-Level Detector (DeBERTa + BiGRU + CRF)
+# Token-level AI text detection via sequence labeling
+# Paper: arXiv:2509.17830 (EMNLP 2025)
+# GitHub: https://github.com/saitejalekkala33/GenAI_Detect_Sentence_Level
+#
+# Architecture: Transformer → BiGRU → LayerNorm → MLP → Linear → CRF
+# Supports backbones: DeBERTa, ModernBERT, RoBERTa, BERT, DistilBERT
+#
+# NOTE: Requires a finetuned checkpoint to produce meaningful predictions.
+#       Set checkpoint_path after training on your data.
+
+model: genai-sentence
+
+# Backbone Model (HuggingFace model ID)
+model_name: microsoft/deberta-v3-base
+
+# Path to finetuned checkpoint (.pt file with model state_dict)
+# Set this after finetuning on your dataset
+checkpoint_path: null
+
+# BiGRU Configuration
+hidden_dim: 512
+num_layers: 2
+dropout: 0.3
+
+# Tokenizer Configuration
+max_length: 512
+
+# Device Settings
+device: auto
+
+# Training Hyperparameters (reference, used by training scripts)
+# learning_rate: 2e-5
+# batch_size: 32
+# epochs: 3
+# weight_decay: 0.01
+# gradient_clip: 1.0
+# scheduler: OneCycleLR (pct_start=0.1, anneal_strategy=cos)
+
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="genai-sentence",
+#                 checkpoint_path="/path/to/finetuned.pt")
+# result = pipe("Your text here")

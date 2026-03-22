@@ -48,6 +48,7 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
         "claude": "omini_text.detectors.claude_detector.ClaudeDetector",
         "openai-judge": "omini_text.detectors.openai_detector.OpenAIDetector",
         "gemini": "omini_text.detectors.gemini_detector.GeminiDetector",
+        "genai-sentence": "omini_text.detectors.genai_sentence_detector.GenAISentenceDetector",
     }
 
     if model not in model_map:
