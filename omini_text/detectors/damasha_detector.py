@@ -258,10 +258,14 @@ class DAMASHADetector(BaseDetector):
 
         # Inference
         with torch.no_grad():
-            predictions, info_mask = self.model(input_ids, attention_mask, style_features)
+            predictions, info_mask, logits = self.model(input_ids, attention_mask, style_features)
 
         # predictions is a list of lists (batch), get first item
         token_preds = predictions[0]
+
+        # Compute per-token softmax from classifier logits
+        # logits shape: (1, seq_len, 2) → softmax → P(human), P(AI)
+        token_probs = torch.softmax(logits[0], dim=-1).cpu().tolist()  # [seq_len, 2]
 
         # Map predictions to words (first subtoken per word)
         word_predictions = self._map_to_words(token_preds, word_ids, len(words))
@@ -281,6 +285,18 @@ class DAMASHADetector(BaseDetector):
         # Get info_mask as list
         info_mask_list = info_mask.squeeze(0).detach().cpu().tolist() if info_mask is not None else []
 
+        # Map token-level softmax to word-level (first subtoken per word)
+        word_logits = []
+        seen_word_ids = set()
+        for idx, word_id in enumerate(word_ids):
+            if word_id is not None and word_id not in seen_word_ids and word_id < len(words):
+                seen_word_ids.add(word_id)
+                if idx < len(token_probs):
+                    word_logits.append(token_probs[idx])  # [P(human), P(AI)]
+        # Pad if needed (words without mapped subtokens)
+        while len(word_logits) < len(words):
+            word_logits.append([0.5, 0.5])
+
         return {
             "text": text,
             "label": binary_label,
@@ -293,7 +309,8 @@ class DAMASHADetector(BaseDetector):
                 "words": words,
                 "word_labels": ["ai" if p == 1 else "human" for p in word_predictions],
                 "word_positions": word_positions,
-                "info_mask": info_mask_list[:len(words)] if info_mask_list else []
+                "info_mask": info_mask_list[:len(words)] if info_mask_list else [],
+                "word_logits": word_logits,
             }
         }
 

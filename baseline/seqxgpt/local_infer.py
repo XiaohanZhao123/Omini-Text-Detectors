@@ -373,10 +373,16 @@ class SeqXGPT:
         labels[:, len(words):] = -1  # Mark padding
 
         # Run inference
+        word_logits = []
         if self.classifier is not None:
             with torch.no_grad():
                 output = self.classifier(feat_tensor, labels)
                 predictions = output['preds'][0].cpu().numpy()
+
+                # Extract emission logits before CRF
+                if 'logits' in output:
+                    raw_logits = output['logits'][0].cpu().numpy()  # [seq_len, 24]
+                    word_logits = raw_logits[:len(words)].tolist()
 
             # Get predictions for actual words only
             predictions = predictions[:len(words)].tolist()
@@ -399,7 +405,8 @@ class SeqXGPT:
             'predictions': pred_labels,
             'ai_intervals': ai_intervals,
             'pred_label': pred_label,
-            'word_positions': word_positions
+            'word_positions': word_positions,
+            'word_logits': word_logits,
         }
 
     def predict_batch(self, texts: List[str]) -> List[Dict]:

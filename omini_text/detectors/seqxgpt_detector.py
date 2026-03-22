@@ -178,6 +178,7 @@ class SeqXGPTDetector(BaseDetector):
         predictions = result.get('predictions', [])
         words = result.get('words', [])
         word_positions = result.get('word_positions', [])
+        word_logits = result.get('word_logits', [])
 
         # Compute binary label: 1 if any AI content detected
         binary_label = 1 if pred_label in ['ai', 'mixed'] else 0
@@ -197,7 +198,8 @@ class SeqXGPTDetector(BaseDetector):
                 'ai_intervals': ai_intervals,
                 'word_predictions': predictions,
                 'words': words,
-                'word_positions': [(p[0], p[1]) for p in word_positions]
+                'word_positions': [(p[0], p[1]) for p in word_positions],
+                'word_logits': word_logits,
             }
         }
 

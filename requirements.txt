@@ -129,3 +129,5 @@ fastNLP
 pytorch-crf
 textstat
 nltk
+# Gemini LLM proxy detectors
+google-genai

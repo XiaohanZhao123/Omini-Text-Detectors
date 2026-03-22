@@ -1,0 +1,8 @@
+streamlit
+torch
+transformers
+torchcrf
+nltk
+textstat
+numpy
+pytorch-crf
