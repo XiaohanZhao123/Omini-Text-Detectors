@@ -70,6 +70,9 @@ def __getattr__(name):
         "DAMASHADetector": "omini_text.detectors.damasha_detector",
         "ShortPHDDetector": "omini_text.detectors.short_phd_detector",
         "FastDetectGPTDetector": "omini_text.detectors.fast_detectgpt_detector",
+        "ClaudeDetector": "omini_text.detectors.claude_detector",
+        "OpenAIDetector": "omini_text.detectors.openai_detector",
+        "GeminiDetector": "omini_text.detectors.gemini_detector",
     }
     if name in _lazy_imports:
         import importlib
@@ -91,4 +94,7 @@ __all__ = [
     "RoFTBoundaryDetector",
     "DAMASHADetector",
     "ShortPHDDetector",
+    "ClaudeDetector",
+    "OpenAIDetector",
+    "GeminiDetector",
 ]

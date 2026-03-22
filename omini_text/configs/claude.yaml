@@ -1,0 +1,30 @@
+# Claude LLM-as-Judge Detector
+# Uses Anthropic API to classify text as human-written or AI-generated
+# Requires: ANTHROPIC_API_KEY in .env file
+#
+# Supported variants:
+#   claude-sonnet-direct   — Sonnet 4.6, no extended thinking (fast, cheap)
+#   claude-sonnet-thinking — Sonnet 4.6, extended thinking (more thorough)
+#   claude-haiku-direct    — Haiku 4.5, no extended thinking (fastest, cheapest)
+#   claude-haiku-thinking  — Haiku 4.5, extended thinking
+
+model: claude
+
+# Variant Selection
+# Choose which Claude model + thinking mode to use
+variant: claude-sonnet-direct
+
+# Extended Thinking Budget (only used for *-thinking variants)
+# Number of tokens allocated for internal reasoning before answering
+thinking_budget: 10000
+
+# API Retry Configuration
+max_retries: 3
+
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="claude")
+# result = pipe("Your text here")
+#
+# # Use a different variant:
+# pipe = pipeline("ai-text-detection", model="claude", variant="claude-haiku-direct")

@@ -1,0 +1,38 @@
+# Gemini LLM-as-Judge Detector
+# Uses Google GenAI API to classify text as human-written or AI-generated
+# Requires: GEMINI_API_KEY in .env file
+#
+# Supported variants:
+#   gemini-pro-direct              — Gemini 3 Pro, direct prompting
+#   gemini-pro-cot                 — Gemini 3 Pro, chain-of-thought
+#   gemini-flash-direct-{minimal,low,medium,high} — Gemini 3 Flash, direct + thinking level
+#   gemini-flash-cot-{minimal,low,medium,high}    — Gemini 3 Flash, CoT + thinking level
+#
+# Thinking levels (Flash only):
+#   minimal — fastest, least reasoning
+#   low     — good balance of speed and quality (recommended)
+#   medium  — more thorough
+#   high    — most thorough, slowest
+
+model: gemini
+
+# Variant Selection
+variant: gemini-flash-direct-low
+
+# API Retry Configuration
+max_retries: 3
+
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="gemini")
+# result = pipe("Your text here")
+#
+# # Use a different variant:
+# pipe = pipeline("ai-text-detection", model="gemini", variant="gemini-flash-cot-medium")
+#
+# # Batch API (access detector directly):
+# from omini_text.detectors.gemini_detector import GeminiDetector
+# det = GeminiDetector({"variant": "gemini-flash-direct-low"})
+# job_name = det.submit_batch(["text1", "text2", ...])
+# job = det.poll_batch(job_name)
+# results = det.parse_batch_results(job)

@@ -1,0 +1,27 @@
+# OpenAI GPT LLM-as-Judge Detector
+# Uses OpenAI API to classify text as human-written or AI-generated
+# Requires: OPENAI_API_KEY in .env file
+#
+# Supported variants:
+#   gpt52-reason-none   — GPT-5.2, no reasoning (fastest, cheapest)
+#   gpt52-reason-low    — GPT-5.2, low reasoning effort
+#   gpt52-reason-medium — GPT-5.2, medium reasoning effort
+#   gpt52-conf-none     — GPT-5.2, returns confidence score, no reasoning
+#   gpt52-cot-none      — GPT-5.2, chain-of-thought prompt, no reasoning
+#   gpt52-cot-low       — GPT-5.2, chain-of-thought prompt, low reasoning
+
+model: openai-judge
+
+# Variant Selection
+variant: gpt52-reason-none
+
+# API Retry Configuration
+max_retries: 3
+
+# Usage:
+# from omini_text import pipeline
+# pipe = pipeline("ai-text-detection", model="openai-judge")
+# result = pipe("Your text here")
+#
+# # Use a different variant:
+# pipe = pipeline("ai-text-detection", model="openai-judge", variant="gpt52-cot-low")
