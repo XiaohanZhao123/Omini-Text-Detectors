@@ -256,6 +256,23 @@ The `ai_threshold` parameter (default 0.5) can be adjusted via kwargs.
 
 ---
 
+---
+
+## External Datasets (Sondos)
+
+**Essays**: ~4,200 essays (v0-v8), sentence-level AI modifications, GPT-generated.
+**Abstracts**: Academic abstracts (format TBD, more models forthcoming).
+
+Setup: see `evaluate/CLAUDE.md` for download/prepare/run instructions.
+
+```bash
+python evaluate/download_gdrive.py                        # download
+python evaluate/prepare_data.py data/external/sondos      # prepare
+python evaluate/run_eval.py e5-small sondos_essays        # evaluate
+```
+
+---
+
 ## Total Records After Flattening
 
 | Dataset | Original Records | Flattened Records | Human | AI |
@@ -263,4 +280,5 @@ The `ai_threshold` parameter (default 0.5) can be adjusted via kwargs.
 | Education | 331 | 662 | 331 | 331 |
 | Enron | 3,000 | 6,000 | 3,000 | 3,000 |
 | Privacy | 1,500 | 3,000 | 1,500 | 1,500 |
-| **Total** | **4,831** | **9,662** | **4,831** | **4,831** |
+| Sondos Essays | ~4,200 | ~8,400 | ~4,200 | ~4,200 |
+| **Total** | **~9,031** | **~18,062** | **~9,031** | **~9,031** |
