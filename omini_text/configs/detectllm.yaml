@@ -1,0 +1,22 @@
+# DetectLLM Detector (Token-level, Zero-shot)
+# Uses per-token statistics (LRR, LogRank, Entropy) from a scoring LM
+# Paper: https://arxiv.org/abs/2306.05540
+
+model: detectllm
+
+# Scoring model (any causal LM that exposes logits)
+model_path: gpt2-xl
+
+# Device Settings
+device: auto
+
+# Detection Parameters
+max_length: 1024
+threshold: auto      # "auto" = calibrate on first batch; or set a float value
+metric: lrr          # Primary metric: lrr, logrank, entropy, likelihood
+
+# Notes:
+# - Zero-shot: no training needed, uses proxy LM to score tokens
+# - Token-level: produces per-word binary labels
+# - GPU: ~6GB for gpt2-xl, ~14GB for llama-7b
+# - LRR = -log_prob / log_rank (lower = more AI-like for causal LMs)

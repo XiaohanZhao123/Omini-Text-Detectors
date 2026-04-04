@@ -1,0 +1,21 @@
+# MGTD Detector (Multilingual token-level machine-generated text detection)
+# Checkpoints: 1-800-SHARED-TASKS/MGTD-Checkpoints, 1024m/MGTD-Long-New
+# Supports 23 languages, 3 architectures (XLMLongformer, XLMRoberta, mDeberta)
+
+model: mgtd
+
+# Checkpoint repository on HuggingFace
+checkpoint_repo: "1-800-SHARED-TASKS/MGTD-Checkpoints"
+
+# Language code (23 supported: ARA, CES, DEU, ELL, ENG, FRA, HEB, HIN, IND,
+# ITA, JPN, KOR, NLD, PES, POL, POR, RON, RUS, SPA, TUR, UKR, VIE, ZHO)
+language: "ENG"
+
+# Architecture: XLMLongformer (4096 tokens), XLMRoberta (512), mDeberta (512)
+architecture: "mDeberta"
+
+# Checkpoint variant (1, 2, or 3 — different training runs)
+variant: 1
+
+device: auto
+cache_dir: null
