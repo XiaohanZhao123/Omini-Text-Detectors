@@ -10,7 +10,8 @@ import torch.nn as nn
 
 from tqdm import tqdm, trange
 from sklearn.metrics import precision_score, recall_score
-from transformers.optimization import AdamW, get_linear_schedule_with_warmup
+from torch.optim import AdamW
+from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import precision_score, recall_score, accuracy_score, f1_score
 
 warnings.filterwarnings('ignore')
@@ -237,6 +238,8 @@ class SupervisedTrainer:
         tags = [self.id2label[tag] for tag in tags]
         tags = [tag.split('-')[-1] for tag in tags]
         tag_counts = Counter(tags)
+        if not tag_counts:
+            return ('human', 0)
         most_common_tag = tag_counts.most_common(1)[0]
 
         return most_common_tag
@@ -366,7 +369,7 @@ if __name__ == "__main__":
             ckpt_name = ''
         else:
             classifier = ModelWiseTransformerClassifier(id2labels=id2label, seq_len=args.seq_len)
-            ckpt_name = ''
+            ckpt_name = os.path.join(os.path.dirname(args.train_path), 'seqxgpt_transformer.pt')
 
         trainer = SupervisedTrainer(data, classifier, en_labels, id2label, args)
 
