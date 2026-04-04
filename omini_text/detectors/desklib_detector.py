@@ -213,4 +213,4 @@ class DesklibDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 Desklib detector cleaned up, GPU memory released")
+        print("[Desklib] Detector cleaned up, GPU memory released")

@@ -1,5 +1,5 @@
 """
-SeqXGPT detector — faithful reimplementation using the original codebase.
+SeqXGPT detector -- faithful reimplementation using the original codebase.
 
 Uses the original backend_utils.py for feature extraction (BBPETokenizerPPLCalc,
 SPLlamaTokenizerPPLCalc) and the original model.py for classification.
@@ -32,25 +32,27 @@ for _p in [str(_SEQXGPT_ROOT), str(_SEQXGPT_CLASSIFIER)]:
 # ---------------------------------------------------------------------------
 # Label constants (from train.py)
 # ---------------------------------------------------------------------------
-EN_LABELS = {'gpt2': 0, 'gptneo': 1, 'gptj': 2, 'llama': 3, 'gpt3re': 4, 'human': 5}
+EN_LABELS = {"gpt2": 0, "gptneo": 1, "gptj": 2, "llama": 3, "gpt3re": 4, "human": 5}
+
 
 def _construct_bmes_labels(en_labels):
     """Reproduce construct_bmes_labels from train.py."""
     id2label = {}
     counter = 0
     for label in en_labels:
-        for pre in ['B-', 'M-', 'E-', 'S-']:
+        for pre in ["B-", "M-", "E-", "S-"]:
             id2label[counter] = pre + label
             counter += 1
     return id2label
 
+
 ID2LABEL = _construct_bmes_labels(EN_LABELS)
 LABEL2ID = {v: k for k, v in ID2LABEL.items()}
-HUMAN_LABEL_IDS = {LABEL2ID[f'{p}-human'] for p in ['B', 'M', 'E', 'S']}
+HUMAN_LABEL_IDS = {LABEL2ID[f"{p}-human"] for p in ["B", "M", "E", "S"]}
 
 
 # ---------------------------------------------------------------------------
-# Feature extraction — uses original backend_utils.py classes directly
+# Feature extraction -- uses original backend_utils.py classes directly
 # ---------------------------------------------------------------------------
 class FeatureExtractor:
     """Load 4 LLMs and extract per-word log-likelihood features.
@@ -60,12 +62,12 @@ class FeatureExtractor:
     - SPLlamaTokenizerPPLCalc for LLaMA
     """
 
-    # Model name → HuggingFace ID (from backend_model.py)
+    # Model name -> HuggingFace ID (from backend_model.py)
     MODEL_HF_IDS = {
-        'gpt2-xl': 'gpt2-xl',
-        'gpt-neo-2.7b': 'EleutherAI/gpt-neo-2.7B',
-        'gpt-j-6b': 'EleutherAI/gpt-j-6B',
-        'llama-7b': 'huggyllama/llama-7b',
+        "gpt2-xl": "gpt2-xl",
+        "gpt-neo-2.7b": "EleutherAI/gpt-neo-2.7B",
+        "gpt-j-6b": "EleutherAI/gpt-j-6B",
+        "llama-7b": "huggyllama/llama-7b",
     }
 
     def __init__(
@@ -81,7 +83,7 @@ class FeatureExtractor:
         self._models = []  # keep references for cleanup
 
         if devices is None:
-            devices = ['cuda:0'] * len(model_names)
+            devices = ["cuda:0"] * len(model_names)
 
         # Match original backend_model.py EXACTLY:
         # - GPT-2 XL: fp32, .to(device)
@@ -92,12 +94,12 @@ class FeatureExtractor:
             hf_id = self.MODEL_HF_IDS.get(name, name)
             print(f"[SeqXGPT] Loading {name} ({hf_id}) on {device}")
 
-            if 'llama' in name.lower():
+            if "llama" in name.lower():
                 tokenizer = LlamaTokenizer.from_pretrained(hf_id, cache_dir=cache_dir)
                 model = LlamaForCausalLM.from_pretrained(
                     hf_id, device_map=device, load_in_8bit=True, cache_dir=cache_dir)
                 calc = SPLlamaTokenizerPPLCalc(model, tokenizer, device)
-            elif 'gpt2' in name.lower():
+            elif "gpt2" in name.lower():
                 # GPT-2: fp32 (no quantization), explicit .to(device)
                 tokenizer = AutoTokenizer.from_pretrained(hf_id, cache_dir=cache_dir)
                 tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -128,13 +130,16 @@ class FeatureExtractor:
         return ll_tokens_list, begin_idx_list
 
     def cleanup(self):
+        """Release GPU memory held by feature extraction models."""
+        import gc
+
         for m in self._models:
             m.cpu()
             del m
         self._models.clear()
         self.ppl_calculators.clear()
         torch.cuda.empty_cache()
-        import gc; gc.collect()
+        gc.collect()
 
 
 # ---------------------------------------------------------------------------
@@ -145,35 +150,39 @@ class SeqXGPTDetector(BaseDetector):
     SeqXGPT detector using the original codebase.
 
     Config keys:
-        checkpoint_path: str — path or HF repo (e.g. 'zcahjl3/seqxgpt-detector')
-        feature_models: list — e.g. ['gpt2-xl', 'gpt-neo-2.7b', 'gpt-j-6b', 'llama-7b']
-        feature_devices: list — e.g. ['cuda:3', 'cuda:4', 'cuda:5', 'cuda:6']
-        device: str — device for classifier (default: 'auto')
-        seq_len: int — max words (default: 1024)
+        checkpoint_path: str -- path or HF repo (e.g. "zcahjl3/seqxgpt-detector")
+        feature_models: list -- e.g. ["gpt2-xl", "gpt-neo-2.7b", "gpt-j-6b", "llama-7b"]
+        feature_devices: list -- e.g. ["cuda:3", "cuda:4", "cuda:5", "cuda:6"]
+        device: str -- device for classifier (default: "auto")
+        seq_len: int -- max words (default: 1024)
     """
 
     def __init__(self, config: dict):
         super().__init__(config)
-        self.checkpoint_path = config.get('checkpoint_path', None)
-        self.classifier_type = config.get('classifier_type', 'transformer')
-        self.feature_models = config.get('feature_models',
-                                          ['gpt2-xl', 'gpt-neo-2.7b', 'gpt-j-6b', 'llama-7b'])
-        self.feature_devices = config.get('feature_devices', None)
-        self.seq_len = config.get('seq_len', 1024)
-        self.cache_dir = config.get('cache_dir', None)
-        self.threshold = config.get('threshold', 0.5)
+        self.checkpoint_path = config.get("checkpoint_path", None)
+        self.classifier_type = config.get("classifier_type", "transformer")
+        self.feature_models = config.get(
+            "feature_models",
+            ["gpt2-xl", "gpt-neo-2.7b", "gpt-j-6b", "llama-7b"],
+        )
+        self.feature_devices = config.get("feature_devices", None)
+        self.seq_len = config.get("seq_len", 1024)
+        self.cache_dir = config.get("cache_dir", None)
+        self.threshold = config.get("threshold", 0.5)
 
-        device = config.get('device', 'auto')
-        self.device = 'cuda:0' if (device == 'auto' and torch.cuda.is_available()) else device
+        device = config.get("device", "auto")
+        self.device = "cuda:0" if (device == "auto" and torch.cuda.is_available()) else device
 
         self._load()
 
-    def _download_hf_checkpoint(self, repo_id: str, filename: str = 'seqxgpt_transformer.pt') -> str:
+    def _download_hf_checkpoint(self, repo_id: str, filename: str = "seqxgpt_transformer.pt") -> str:
+        """Download checkpoint from HuggingFace Hub."""
         from huggingface_hub import hf_hub_download
         print(f"[SeqXGPT] Downloading checkpoint: {repo_id}/{filename}")
         return hf_hub_download(repo_id=repo_id, filename=filename)
 
     def _load(self):
+        """Load feature extractor and classifier."""
         from backend_utils import split_sentence
         from model import ModelWiseCNNClassifier, ModelWiseTransformerClassifier
         self._split_sentence = split_sentence
@@ -190,7 +199,7 @@ class SeqXGPTDetector(BaseDetector):
         )
 
         # 2. Classifier
-        if self.classifier_type == 'cnn':
+        if self.classifier_type == "cnn":
             self.classifier = ModelWiseCNNClassifier(id2labels=ID2LABEL, dropout_rate=0.1)
         else:
             self.classifier = ModelWiseTransformerClassifier(
@@ -201,16 +210,16 @@ class SeqXGPTDetector(BaseDetector):
         # 3. Load checkpoint
         ckpt_path = self.checkpoint_path
         if ckpt_path:
-            if '/' in ckpt_path and not Path(ckpt_path).exists():
-                parts = ckpt_path.split('/')
+            if "/" in ckpt_path and not Path(ckpt_path).exists():
+                parts = ckpt_path.split("/")
                 if len(parts) == 2:
                     ckpt_path = self._download_hf_checkpoint(ckpt_path)
                 else:
-                    ckpt_path = self._download_hf_checkpoint('/'.join(parts[:2]), '/'.join(parts[2:]))
+                    ckpt_path = self._download_hf_checkpoint("/".join(parts[:2]), "/".join(parts[2:]))
             if Path(ckpt_path).exists():
                 print(f"[SeqXGPT] Loading checkpoint: {ckpt_path}")
                 saved = torch.load(ckpt_path, map_location=self.device, weights_only=False)
-                if hasattr(saved, 'state_dict'):
+                if hasattr(saved, "state_dict"):
                     self.classifier.load_state_dict(saved.state_dict())
                 else:
                     self.classifier.load_state_dict(saved)
@@ -218,24 +227,26 @@ class SeqXGPTDetector(BaseDetector):
             else:
                 print(f"[SeqXGPT] WARNING: checkpoint not found: {ckpt_path}")
         else:
-            print("[SeqXGPT] WARNING: no checkpoint — predictions will be random")
+            print("[SeqXGPT] WARNING: no checkpoint -- predictions will be random")
 
         self.classifier.to(self.device)
         self.classifier.eval()
 
     # -----------------------------------------------------------------------
-    # Inference — follows the original data flow exactly
+    # Inference -- follows the original data flow exactly
     # -----------------------------------------------------------------------
     def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
+        """Detect AI-generated content in text. Supports single text or batch."""
         if isinstance(text, list):
             return [self._detect_single(t) for t in text]
         return self._detect_single(text)
 
     def _detect_single(self, text: str) -> Dict:
+        """Detect single text using original SeqXGPT pipeline."""
         # 1. Extract features (uses original backend_utils)
         ll_tokens_list, begin_idx_list = self.extractor.extract(text)
 
-        # 2. Align features — exactly as dataloader.py lines 90-106
+        # 2. Align features -- exactly as dataloader.py lines 90-106
         begin_idx_list_np = np.array(begin_idx_list)
         max_begin_idx = int(np.max(begin_idx_list_np))
         for idx in range(len(ll_tokens_list)):
@@ -257,22 +268,22 @@ class SeqXGPTDetector(BaseDetector):
             features = features[:self.seq_len]
             num_words = self.seq_len
 
-        # 4. Run classifier — shape: (1, seq_len, 4)
+        # 4. Run classifier -- shape: (1, seq_len, 4)
         feat_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(self.device)
         labels = torch.zeros(1, self.seq_len, dtype=torch.long).to(self.device)
         labels[:, num_words:] = -1
 
         with torch.no_grad():
             output = self.classifier(feat_tensor, labels)
-            predictions = output['preds'][0].cpu().numpy()[:num_words].tolist()
-            raw_logits = output.get('logits')
+            predictions = output["preds"][0].cpu().numpy()[:num_words].tolist()
+            raw_logits = output.get("logits")
             if raw_logits is not None:
                 word_logits = raw_logits[0].cpu().numpy()[:num_words].tolist()
             else:
                 word_logits = []
 
         # 5. Convert to label strings and intervals
-        pred_labels = [ID2LABEL.get(p, 'O') for p in predictions]
+        pred_labels = [ID2LABEL.get(p, "O") for p in predictions]
 
         # Get words using original split_sentence
         words = self._split_sentence(text)
@@ -285,41 +296,49 @@ class SeqXGPTDetector(BaseDetector):
         # 6. Overall label
         ai_coverage = sum(e - s for s, e in ai_intervals) / max(len(text), 1)
         if ai_coverage > 0.9:
-            pred_label = 'ai'
+            pred_label = "ai"
         elif ai_coverage > 0.1:
-            pred_label = 'mixed'
+            pred_label = "mixed"
         else:
-            pred_label = 'human'
+            pred_label = "human"
 
-        binary_label = 1 if pred_label in ('ai', 'mixed') else 0
+        binary_label = 1 if pred_label in ("ai", "mixed") else 0
 
         return {
-            'text': text,
-            'label': binary_label,
-            'score': float(ai_coverage),
-            'metadata': {
-                'model': 'seqxgpt',
-                'pred_label': pred_label,
-                'ai_intervals': ai_intervals,
-                'word_predictions': pred_labels,
-                'words': words,
-                'word_positions': word_positions,
-                'word_logits': word_logits,
-            }
+            "text": text,
+            "label": binary_label,
+            "score": float(ai_coverage),
+            "metadata": {
+                "model": "seqxgpt",
+                "pred_label": pred_label,
+                "ai_intervals": ai_intervals,
+                "word_predictions": pred_labels,
+                "words": words,
+                "word_positions": word_positions,
+                "word_logits": word_logits,
+            },
         }
 
     def _empty_result(self, text: str) -> Dict:
+        """Return empty result for texts that produce no features."""
         return {
-            'text': text, 'label': 0, 'score': 0.0,
-            'metadata': {
-                'model': 'seqxgpt', 'pred_label': 'human',
-                'ai_intervals': [], 'word_predictions': [],
-                'words': [], 'word_positions': [], 'word_logits': [],
-            }
+            "text": text,
+            "label": 0,
+            "score": 0.0,
+            "metadata": {
+                "model": "seqxgpt",
+                "pred_label": "human",
+                "ai_intervals": [],
+                "word_predictions": [],
+                "words": [],
+                "word_positions": [],
+                "word_logits": [],
+            },
         }
 
     @staticmethod
     def _get_word_positions(text: str, words: List[str]) -> List[Tuple[int, int]]:
+        """Get character positions for each word in the text."""
         positions = []
         pos = 0
         for word in words:
@@ -338,22 +357,22 @@ class SeqXGPTDetector(BaseDetector):
         current_start = None
 
         for i, pred_id in enumerate(predictions):
-            label = ID2LABEL.get(pred_id, 'O')
+            label = ID2LABEL.get(pred_id, "O")
             is_ai = pred_id not in HUMAN_LABEL_IDS
-            prefix = label.split('-')[0] if '-' in label else ''
+            prefix = label.split("-")[0] if "-" in label else ""
 
             if i >= len(word_positions):
                 break
 
             if is_ai:
-                if prefix == 'B':
+                if prefix == "B":
                     current_start = word_positions[i][0]
-                elif prefix == 'S':
+                elif prefix == "S":
                     intervals.append([word_positions[i][0], word_positions[i][1]])
-                elif prefix == 'E' and current_start is not None:
+                elif prefix == "E" and current_start is not None:
                     intervals.append([current_start, word_positions[i][1]])
                     current_start = None
-                elif prefix == 'M' and current_start is None:
+                elif prefix == "M" and current_start is None:
                     current_start = word_positions[i][0]
             else:
                 if current_start is not None:
@@ -366,10 +385,13 @@ class SeqXGPTDetector(BaseDetector):
         return intervals
 
     def cleanup(self):
+        """Release GPU memory by deleting models and clearing CUDA cache."""
+        import gc
+
         self.extractor.cleanup()
-        if hasattr(self, 'classifier'):
+        if hasattr(self, "classifier"):
             self.classifier.cpu()
             del self.classifier
         torch.cuda.empty_cache()
-        import gc; gc.collect()
-        print("[SeqXGPT Detector] Cleaned up")
+        gc.collect()
+        print("[SeqXGPT Detector] Cleaned up, GPU memory released")

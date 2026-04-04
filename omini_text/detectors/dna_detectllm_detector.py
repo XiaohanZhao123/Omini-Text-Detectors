@@ -101,7 +101,7 @@ class DNADetectLLMDetector(BaseDetector):
         device = config.get("device", "split")
 
         # Print initialization info
-        print("\n🧬 Initializing DNA-DetectLLM Detector")
+        print("\n[DNA-DetectLLM] Initializing detector")
         print(f"   Observer model: {observer_name}")
         print(f"   Performer model: {performer_name}")
         print(f"   Mode: {mode}")
@@ -170,7 +170,7 @@ class DNADetectLLMDetector(BaseDetector):
         ai_score = -dna_score
 
         return {
-            "text": text[:100] + "..." if len(text) > 100 else text,
+            "text": text,
             "label": label,
             "score": float(ai_score),
             "metadata": {
@@ -195,7 +195,7 @@ class DNADetectLLMDetector(BaseDetector):
 
             results.append(
                 {
-                    "text": text[:100] + "..." if len(text) > 100 else text,
+                    "text": text,
                     "label": label,
                     "score": float(ai_score),
                     "metadata": {
@@ -235,4 +235,4 @@ class DNADetectLLMDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 DNA-DetectLLM detector cleaned up, GPU memory released")
+        print("[DNA-DetectLLM] Detector cleaned up, GPU memory released")

@@ -237,7 +237,8 @@ def sentence_accuracy(sentences, predictions):
     y_true = [s["label"] for s in sentences]
     y_pred = [p[0] for p in predictions]
 
-    assert len(y_true) == len(y_pred), f"Length mismatch: {len(y_true)} vs {len(y_pred)}"
+    if len(y_true) != len(y_pred):
+        raise ValueError(f"Length mismatch: {len(y_true)} vs {len(y_pred)}")
 
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)

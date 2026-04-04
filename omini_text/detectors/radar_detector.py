@@ -169,4 +169,4 @@ class RADARDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 RADAR detector cleaned up, GPU memory released")
+        print("[RADAR] Detector cleaned up, GPU memory released")

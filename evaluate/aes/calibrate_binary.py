@@ -46,7 +46,8 @@ def load_and_split():
     with open(DATA_PATH) as f:
         for line in f:
             docs.append(json.loads(line))
-    assert len(docs) == 156, f"Expected 156 docs, got {len(docs)}"
+    if len(docs) != 156:
+        raise ValueError(f"Expected 156 docs, got {len(docs)}")
 
     # Deterministic split by sorted q_ids
     all_q_ids = sorted(d["q_id"] for d in docs)

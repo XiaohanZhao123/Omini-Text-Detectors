@@ -145,4 +145,4 @@ class E5SmallDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 E5-Small detector cleaned up, GPU memory released")
+        print("[E5-Small] Detector cleaned up, GPU memory released")

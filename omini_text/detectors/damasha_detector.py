@@ -305,7 +305,7 @@ class DAMASHADetector(BaseDetector):
                 "model": "damasha",
                 "pred_label": pred_label,
                 "ai_intervals": ai_intervals,
-                "token_predictions": token_preds if isinstance(token_preds, list) else token_preds,
+                "token_predictions": token_preds if isinstance(token_preds, list) else list(token_preds),
                 "words": words,
                 "word_labels": ["ai" if p == 1 else "human" for p in word_predictions],
                 "word_positions": word_positions,

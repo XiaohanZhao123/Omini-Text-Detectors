@@ -12,7 +12,7 @@ scoring_model_name: davinci-002 # Options: davinci-002, babbage-002, gpt-35-turb
 api_base: https://api.openai.com/v1 # OpenAI or Azure endpoint
 api_version: 2023-09-15-preview # For Azure only
 
-# ⚠️ API Key: Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in .env file
+# API Key: Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in .env file
 # Do NOT put API keys in this config file
 
 # Distribution Estimation
