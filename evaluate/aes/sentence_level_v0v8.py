@@ -45,7 +45,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-DATA_PATH = Path(__file__).resolve().parent / "essays_v0_v8_spans_with_eval.csv"
+DATA_PATH = Path(__file__).resolve().parent.parent.parent / "draft" / "essay_data_03_22" / "AI_detection_data" / "essays_v0_v8_spans_finall_eval.csv"
 PREDICTIONS_DIR = Path(__file__).resolve().parent / "results" / "sentence_v0v8_predictions"
 OUTPUT_DIR = Path(__file__).resolve().parent / "results" / "sentence_v0v8_analysis"
 
@@ -629,13 +629,19 @@ class OpenAISentenceDetector:
         self.model_name, self.reasoning_effort = OPENAI_SENT_MAP[method_name]
         self.conf_mode = "-conf-" in method_name
 
-        from dotenv import load_dotenv
-        env_path = Path(__file__).resolve().parent.parent / ".env"
-        load_dotenv(env_path)
+        try:
+            from dotenv import load_dotenv
+            for env_path in [Path(__file__).resolve().parent.parent / ".env",
+                             Path(__file__).resolve().parent.parent.parent / ".env"]:
+                if env_path.exists():
+                    load_dotenv(env_path)
+                    break
+        except ImportError:
+            pass
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not found. Set it in .env file.")
+            raise ValueError("OPENAI_API_KEY not found. Set it in environment or .env file.")
 
         from openai import OpenAI
         self.client = OpenAI(api_key=api_key)
@@ -1164,7 +1170,20 @@ def main():
         ),
     )
     parser.add_argument("--device", type=str, default="cuda:0")
+    parser.add_argument("--data", type=str, default=None,
+                        help="Path to CSV data file (default: essays CSV)")
+    parser.add_argument("--output-prefix", type=str, default=None,
+                        help="Prefix for output dirs (e.g. 'abstracts' → sentence_abstracts_predictions/)")
     args = parser.parse_args()
+
+    # Override data path and output dirs if specified
+    global DATA_PATH, PREDICTIONS_DIR, OUTPUT_DIR
+    if args.data:
+        DATA_PATH = Path(args.data)
+    if args.output_prefix:
+        base = Path(__file__).resolve().parent / "results"
+        PREDICTIONS_DIR = base / f"sentence_{args.output_prefix}_predictions"
+        OUTPUT_DIR = base / f"sentence_{args.output_prefix}_analysis"
 
     methods = resolve_methods(args.methods)
 
