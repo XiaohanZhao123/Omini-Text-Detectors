@@ -76,7 +76,7 @@ class BinocularsDetector(BaseDetector):
         use_bfloat16 = config.get("use_bfloat16", True)
 
         # Print initialization info
-        print("\n🔭 Initializing Binoculars Detector")
+        print("\n[Binoculars] Initializing detector")
         print(f"   Observer model: {observer_name}")
         print(f"   Performer model: {performer_name}")
         print(f"   Mode: {mode}")
@@ -202,4 +202,4 @@ class BinocularsDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 Binoculars detector cleaned up, GPU memory released")
+        print("[Binoculars] Detector cleaned up, GPU memory released")

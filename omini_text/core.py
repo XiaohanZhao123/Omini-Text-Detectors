@@ -118,8 +118,6 @@ def get_pipeline_from_cfg(cfg_path: str) -> "DetectorPipeline":
 
     # Remove 'model' from config to avoid duplicate parameter
     config_without_model = {k: v for k, v in config.items() if k != "model"}
-    config_without_model = {k: v for k, v in config.items() if k != "model"}
-    config_without_model = {k: v for k, v in config.items() if k != "model"}
 
     # Use pipeline function with config as kwargs
     return pipeline("ai-text-detection", model=model, **config_without_model)

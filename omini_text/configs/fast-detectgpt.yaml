@@ -1,6 +1,6 @@
 # Fast-DetectGPT Detector (95%+ AUROC, 340× faster than DetectGPT)
 # Zero-shot detection using conditional probability curvature
-# ⚠️ GPU REQUIRED - Cannot run on CPU
+# GPU REQUIRED - Cannot run on CPU
 # See docs/CONFIGURATION.md for detailed parameter descriptions
 
 model: fast-detectgpt
@@ -18,7 +18,7 @@ scoring_model_name: falcon-7b-instruct # Can be same or different (if tokenizers
 device: "0,1,2,3" # Multi-GPU recommended. Options: "0" (single), "0,1,2,3" (multi), "auto"
 
 # Cache Configuration
-cache_dir: "../cache" # HuggingFace model cache directory (relative or absolute)
+cache_dir: "cache" # HuggingFace model cache directory (relative or absolute)
 
 # Detection Configuration
 threshold: 0.5 # Classification threshold (calibrated probability, 0.5 = balanced)

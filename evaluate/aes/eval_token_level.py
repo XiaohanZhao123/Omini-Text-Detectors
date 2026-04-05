@@ -70,14 +70,16 @@ def load_aes_data(data_path: str) -> List[Dict]:
                 gt_words = text.split()
 
                 # Verify word count matches
-                assert len(gt_words) == len(token_labels), (
-                    f"Word count mismatch for {q_id}/{version['version_id']}: "
-                    f"{len(gt_words)} words vs {len(token_labels)} labels"
-                )
-                assert len(gt_words) == version["num_tokens"], (
-                    f"Word count mismatch for {q_id}/{version['version_id']}: "
-                    f"{len(gt_words)} words vs {version['num_tokens']} num_tokens"
-                )
+                if len(gt_words) != len(token_labels):
+                    raise ValueError(
+                        f"Word count mismatch for {q_id}/{version['version_id']}: "
+                        f"{len(gt_words)} words vs {len(token_labels)} labels"
+                    )
+                if len(gt_words) != version["num_tokens"]:
+                    raise ValueError(
+                        f"Word count mismatch for {q_id}/{version['version_id']}: "
+                        f"{len(gt_words)} words vs {version['num_tokens']} num_tokens"
+                    )
 
                 # Convert string labels to int
                 true_labels = [1 if l == "ai" else 0 for l in token_labels]

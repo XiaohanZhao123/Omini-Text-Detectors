@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
@@ -23,6 +24,7 @@ import multiprocessing as mp
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from evaluate.data_loader import EvalRecord, load_dataset, DATASETS
+from evaluate.eval_utils import format_output_record
 from omini_text import pipeline
 
 
@@ -113,35 +115,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def format_output_record(
-    eval_record: EvalRecord, detector_name: str, detection_result: dict
-) -> dict:
-    """Format detection result into output schema."""
-    predicted_label = detection_result["label"]
-    ground_truth = eval_record.ground_truth_label
-
-    return {
-        "detection": {
-            "detector": detector_name,
-            "label": predicted_label,
-            "correct": predicted_label == ground_truth,
-            "detector_metadata": detection_result.get("metadata", {}),
-        },
-        "ground_truth": {"label": ground_truth},
-        "reference": {
-            "source_file": eval_record.source_file,
-            "line_index": eval_record.line_index,
-            "text_field": eval_record.text_field,
-        },
-        "metadata": {
-            "domain": eval_record.domain,
-            "task": eval_record.task,
-            "ai_model": eval_record.ai_model,
-        },
-        "score": detection_result.get("score", None),
-    }
-
-
 def run_detector_on_records(
     detector_name: str,
     dataset_name: str,
@@ -167,7 +140,6 @@ def run_detector_on_records(
         pipe = pipeline("ai-text-detection", model=detector_name, **kwargs)
     except Exception as e:
         print(f"  ERROR loading detector: {e}")
-        import traceback
         traceback.print_exc()
         return {
             "records": 0,
@@ -241,10 +213,10 @@ def load_turingbench_generator(data_dir: str, generator: str, max_samples: int =
     return list(_load_turingbench(data_dir, task="TT", generator=generator, max_samples=max_samples))
 
 
-def load_aes_chains_version(version: str) -> List[EvalRecord]:
+def load_aes_chains_version(data_dir: str, version: str) -> List[EvalRecord]:
     """Load AES chains for a specific AI version (v1, v2, or v3)."""
     from evaluate.data_loader import _load_aes_chains
-    return list(_load_aes_chains(version=version))
+    return list(_load_aes_chains(data_dir, version=version))
 
 
 def main():
@@ -288,7 +260,7 @@ def main():
                 print(f"{'#'*70}")
 
                 try:
-                    records = load_aes_chains_version(ver)
+                    records = load_aes_chains_version(args.data_dir, ver)
                     if not records:
                         print(f"  WARNING: No records loaded for {ver}")
                         continue

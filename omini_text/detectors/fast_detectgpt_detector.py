@@ -116,8 +116,8 @@ class FastDetectGPTDetector(BaseDetector):
         # Validate and warn about model combination
         self._validate_model_combination(sampling_model, scoring_model)
 
-        # Set up cache directory
-        cache_dir = config.get("cache_dir", "../cache")
+        # Set up cache directory (relative to project root)
+        cache_dir = config.get("cache_dir", "cache")
         cache_path = Path(__file__).parent.parent.parent / cache_dir
         cache_path = cache_path.resolve()
 
@@ -130,7 +130,7 @@ class FastDetectGPTDetector(BaseDetector):
         )
 
         # Initialize Fast-DetectGPT detector with wrapper
-        print("\n🚀 Initializing Fast-DetectGPT Detector")
+        print("\n[Fast-DetectGPT] Initializing detector")
         print(
             f"   Sampling model: {sampling_model} ({self.MODEL_FULLNAMES.get(sampling_model, sampling_model)})"
         )
@@ -155,17 +155,17 @@ class FastDetectGPTDetector(BaseDetector):
 
         if combination_key in self.RECOMMENDED_COMBINATIONS:
             info = self.RECOMMENDED_COMBINATIONS[combination_key]
-            print(f"\n✅ Using recommended model combination: {combination_key}")
+            print(f"\n[Fast-DetectGPT] Using recommended model combination: {combination_key}")
             print(f"   Expected accuracy: {info['accuracy']:.2%}")
             print(f"   {info['description']}\n")
         else:
             print(
-                f"\n⚠️  Warning: Model combination '{combination_key}' is not pre-calibrated."
+                f"\n[Fast-DetectGPT] Warning: Model combination '{combination_key}' is not pre-calibrated."
             )
             print("   Results may be less accurate than recommended combinations.\n")
-            print("   📋 Recommended combinations:")
+            print("   Recommended combinations:")
             for key, info in self.RECOMMENDED_COMBINATIONS.items():
-                print(f"      • {key}: {info['accuracy']:.2%} - {info['description']}")
+                print(f"      - {key}: {info['accuracy']:.2%} - {info['description']}")
             print()
 
     def detect(self, text: Union[str, List[str]]) -> Union[Dict, List[Dict]]:
@@ -235,4 +235,4 @@ class FastDetectGPTDetector(BaseDetector):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("🧹 Fast-DetectGPT detector cleaned up, GPU memory released")
+        print("[Fast-DetectGPT] Detector cleaned up, GPU memory released")

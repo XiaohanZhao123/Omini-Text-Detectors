@@ -107,3 +107,10 @@ class GlimpseDetector(BaseDetector):
             "score": float(prob),
             "metadata": {"criterion": float(criterion), "num_tokens": int(num_tokens)},
         }
+
+    def cleanup(self):
+        """Release resources held by the Glimpse detector."""
+        if hasattr(self, "glimpse") and self.glimpse is not None:
+            del self.glimpse
+            self.glimpse = None
+        print("[Glimpse] Detector cleaned up")

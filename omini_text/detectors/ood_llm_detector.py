@@ -206,7 +206,7 @@ class OODLLMDetector(BaseDetector):
         label = 1 if ai_prob >= self.threshold else 0
 
         return {
-            "text": text[:100] + "..." if len(text) > 100 else text,
+            "text": text,
             "label": label,
             "score": float(ai_prob),
             "metadata": {
@@ -245,7 +245,7 @@ class OODLLMDetector(BaseDetector):
 
             results.append(
                 {
-                    "text": text[:100] + "..." if len(text) > 100 else text,
+                    "text": text,
                     "label": label,
                     "score": float(ai_prob),
                     "metadata": {

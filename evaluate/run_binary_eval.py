@@ -21,14 +21,16 @@ import csv
 import json
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 # Add parent directory to path for omini_text imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from evaluate.data_loader import EvalRecord, load_dataset
+from evaluate.eval_utils import format_output_record
 from omini_text import pipeline
 
 # Binary classification methods (officially supported)
@@ -77,41 +79,18 @@ def parse_args():
         help="Max samples for RAID (default: None = full dataset, stratified 50/50 if set)",
     )
     parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="data/",
+        help="Base data directory (default: data/)",
+    )
+    parser.add_argument(
         "--hc3_max_samples",
         type=int,
         default=None,
         help="Max samples per class for HC3 (default: None = full dataset)",
     )
     return parser.parse_args()
-
-
-def format_output_record(
-    eval_record: EvalRecord, detector_name: str, detection_result: dict
-) -> dict:
-    """Format detection result into output schema."""
-    predicted_label = detection_result["label"]
-    ground_truth = eval_record.ground_truth_label
-
-    return {
-        "detection": {
-            "detector": detector_name,
-            "label": predicted_label,
-            "correct": predicted_label == ground_truth,
-            "detector_metadata": detection_result.get("metadata", {}),
-        },
-        "ground_truth": {"label": ground_truth},
-        "reference": {
-            "source_file": eval_record.source_file,
-            "line_index": eval_record.line_index,
-            "text_field": eval_record.text_field,
-        },
-        "metadata": {
-            "domain": eval_record.domain,
-            "task": eval_record.task,
-            "ai_model": eval_record.ai_model,
-        },
-        "score": detection_result.get("score", None),
-    }
 
 
 def run_detector_on_dataset(
@@ -229,14 +208,13 @@ def main():
             kwargs["max_samples"] = args.hc3_max_samples
 
         try:
-            records = list(load_dataset(dataset_name, "data/", **kwargs))
+            records = list(load_dataset(dataset_name, args.data_dir, **kwargs))
             datasets_cache[dataset_name] = records
             human_count = sum(1 for r in records if r.ground_truth_label == 0)
             ai_count = len(records) - human_count
             print(f"  Loaded {len(records)} records ({human_count} human, {ai_count} AI)")
         except Exception as e:
             print(f"  ERROR loading {dataset_name}: {e}")
-            import traceback
             traceback.print_exc()
             datasets_cache[dataset_name] = []
 

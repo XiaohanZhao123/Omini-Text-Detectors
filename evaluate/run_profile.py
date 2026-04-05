@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # This avoids a path conflict that breaks transformers imports
 # Now safe to import data_loader
 from evaluate.data_loader import DATASETS, EvalRecord, load_dataset
+from evaluate.eval_utils import format_output_record
 from omini_text import pipeline
 
 DETECTORS = [
@@ -84,35 +85,6 @@ def resolve_list(values: List[str], all_options: List[str]) -> List[str]:
         if v not in all_options:
             raise ValueError(f"Unknown option: {v}. Must be one of {all_options}")
     return values
-
-
-def format_output_record(
-    eval_record: EvalRecord, detector_name: str, detection_result: dict
-) -> dict:
-    """Format detection result into output schema."""
-    predicted_label = detection_result["label"]
-    ground_truth = eval_record.ground_truth_label
-
-    return {
-        "detection": {
-            "detector": detector_name,
-            "label": predicted_label,
-            "correct": predicted_label == ground_truth,
-            "detector_metadata": detection_result.get("metadata", {}),
-        },
-        "ground_truth": {"label": ground_truth},
-        "reference": {
-            "source_file": eval_record.source_file,
-            "line_index": eval_record.line_index,
-            "text_field": eval_record.text_field,
-        },
-        "metadata": {
-            "domain": eval_record.domain,
-            "task": eval_record.task,
-            "ai_model": eval_record.ai_model,
-        },
-        "score": detection_result.get("score", None),
-    }
 
 
 def run_detector_on_dataset(

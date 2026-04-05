@@ -195,7 +195,7 @@ def run_method(method_name, records, device="cuda:0"):
     # Cleanup GPU
     try:
         pipe.cleanup()
-    except:
+    except Exception:
         pass
 
     import torch
