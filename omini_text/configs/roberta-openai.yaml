@@ -1,0 +1,22 @@
+# RoBERTa-OpenAI Detector (Document-level)
+# OpenAI's GPT-2 output detector fine-tuned on RoBERTa
+# Model: openai-community/roberta-base-openai-detector
+
+model: roberta-openai
+
+# Model Configuration
+model_path: openai-community/roberta-base-openai-detector
+
+# Device Settings
+device: auto
+
+# Detection Parameters
+max_length: 512
+threshold: 0.5
+
+# Notes:
+# - Architecture: RoBERTa-base (125M params) for sequence classification
+# - Training: Fine-tuned on GPT-2 1.5B outputs vs human text
+# - Label convention: 0=Real, 1=Fake (auto-detected from model config)
+# - GPU: ~500MB VRAM
+# - Limitation: Trained on GPT-2 outputs — may degrade on newer LLMs

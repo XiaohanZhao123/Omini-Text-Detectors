@@ -145,7 +145,7 @@ class SnifferLlamaModel(SnifferBaseModel):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.do_generate = None
         self.text = None
-        model_path = ''
+        model_path = 'huggyllama/llama-7b'
         self.base_tokenizer = LlamaTokenizer.from_pretrained(model_path)
         self.base_tokenizer.pad_token_id = self.base_tokenizer.eos_token_id
         self.base_tokenizer.unk_token_id = self.base_tokenizer.unk_token_id

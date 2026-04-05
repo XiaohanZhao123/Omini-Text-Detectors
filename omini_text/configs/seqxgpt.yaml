@@ -3,8 +3,8 @@
 # Paper: https://arxiv.org/abs/2310.08903
 # GitHub: https://github.com/Jihuai-wpy/SeqXGPT
 #
-# Achieves ~90% accuracy with all 4 models (GPT-2, GPT-Neo, GPT-J, LLaMA)
-# Requires ~28GB VRAM total - use feature_devices to distribute across GPUs
+# Achieves 95.6% word accuracy with paper's exact models (gpt2-xl, gpt-neo-2.7B, gpt-j-6B, llama-7B)
+# Requires ~43GB VRAM total - use feature_devices to distribute across GPUs
 
 model: seqxgpt
 
@@ -28,15 +28,13 @@ checkpoint_path: zcahjl3/seqxgpt-detector
 # Supported models:
 #   gpt2, gpt2-medium, gpt2-large, gpt2-xl, gpt-neo-125m, gpt-neo-1.3b
 #
-# The trained model was trained with 4 models: GPT-2, GPT-Neo, GPT-J, LLaMA
-# For full accuracy, use multiple models. Single model gives reduced accuracy.
-#
-# Full 4-model config for best accuracy (~95%):
-# feature_models: [gpt2, gpt-neo-1.3b, gpt-j-6b, llama-7b]
-# Requires ~25GB+ VRAM total (distribute across GPUs with feature_devices)
+# The trained checkpoint uses paper's exact feature models:
+#   gpt2-xl (1.5B), gpt-neo-2.7B, gpt-j-6B, llama-7B
+# IMPORTANT: Feature models MUST match what the checkpoint was trained with.
+# Using different sizes (e.g. gpt2 instead of gpt2-xl) will produce garbage results.
 feature_models:
-  - gpt2
-  - gpt-neo-1.3b
+  - gpt2-xl
+  - gpt-neo-2.7b
   - gpt-j-6b
   - llama-7b
 
@@ -49,10 +47,10 @@ device: auto
 # Order matches feature_models list above
 # Uncomment to distribute across GPUs:
 feature_devices:
-  - cuda:2  # gpt2 (~0.5GB)
-  - cuda:2  # gpt-neo-1.3b (~2.5GB)
-  - cuda:4  # gpt-j-6b (~12GB)
-  - cuda:6  # llama-7b (~13GB)
+  - cuda:3  # gpt2-xl (~6GB)
+  - cuda:4  # gpt-neo-2.7b (~11GB)
+  - cuda:5  # gpt-j-6b (~12GB)
+  - cuda:6  # llama-7b (~14GB)
 
 # Model Parameters
 # Maximum number of words per document (paper default: 1024)
@@ -68,7 +66,7 @@ threshold: 0.5
 # =============================================================================
 # Performance Notes
 # =============================================================================
-# GPU Memory: ~2-4GB with GPT-2 only, ~6-8GB with multiple models
+# GPU Memory: ~43GB total with paper's models (distribute across 4 GPUs)
 # Speed: ~2-5s per text (depends on text length and number of feature models)
 #
 # IMPORTANT: Requires trained classifier weights for accurate results
@@ -77,7 +75,8 @@ threshold: 0.5
 # =============================================================================
 # Training Instructions
 # =============================================================================
-# No pretrained weights are publicly available. You must train the classifier:
+# Retrained checkpoint at zcahjl3/seqxgpt-detector (95.6% word acc on SeqXGPT-Bench).
+# To retrain from scratch:
 #
 # 1. Prepare training data in SeqXGPT format:
 #    - JSONL file with: text, label, prompt_len, label_int, begin_idx_list, ll_tokens_list

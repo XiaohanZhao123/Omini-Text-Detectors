@@ -43,14 +43,14 @@ def get_features(type, input_file, output_file):
     en_model_names = ['gpt_2', 'gpt_neo', 'gpt_J', 'llama']
     cn_model_names = ['wenzhong', 'sky_text', 'damo', 'chatglm']
 
-    gpt_2_api = 'http://10.176.52.120:20098/inference'
-    gpt_neo_api = 'http://10.176.52.120:20097/inference'
-    gpt_J_api = 'http://10.176.52.120:20099/inference'
-    llama_api = 'http://10.176.52.120:20100/inference'
+    gpt_2_api = 'http://127.0.0.1:20098/inference'
+    gpt_neo_api = 'http://127.0.0.1:20097/inference'
+    gpt_J_api = 'http://127.0.0.1:20099/inference'
+    llama_api = 'http://127.0.0.1:20100/inference'
     wenzhong_api = 'http://10.176.52.101:20160/inference'
-    sky_text_api = 'http://10.176.52.120:20102/inference'
-    damo_api = 'http://10.176.52.120:20101/inference'
-    chatglm_api = 'http://10.176.52.120:20103/inference'
+    sky_text_api = 'http://127.0.0.1:20102/inference'
+    damo_api = 'http://127.0.0.1:20101/inference'
+    chatglm_api = 'http://127.0.0.1:20103/inference'
 
     en_model_apis = [gpt_2_api, gpt_neo_api, gpt_J_api, llama_api]
     cn_model_apis = [wenzhong_api, sky_text_api, damo_api, chatglm_api]
