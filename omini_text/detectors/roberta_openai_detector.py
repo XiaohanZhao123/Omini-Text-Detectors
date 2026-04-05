@@ -58,7 +58,7 @@ class RoBERTaOpenAIDetector(BaseDetector):
                 break
         if self._ai_index is None:
             # Fallback: check label2id for more robust mapping
-            label2id = getattr(self.model.config, 'label2id', {})
+            label2id = getattr(self.model.config, "label2id", {})
             for label_name, idx in label2id.items():
                 if label_name.upper() in ("FAKE", "AI", "MACHINE", "GENERATED"):
                     self._ai_index = int(idx)
