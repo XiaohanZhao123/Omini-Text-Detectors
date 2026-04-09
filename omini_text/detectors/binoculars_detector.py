@@ -83,6 +83,9 @@ class BinocularsDetector(BaseDetector):
         print(f"   Max tokens: {max_token_observed}")
         print(f"   Precision: {'bfloat16' if use_bfloat16 else 'float32'}\n")
 
+        # Resolve device
+        device = config.get("device")
+
         # Initialize Binoculars
         self.detector = Binoculars(
             observer_name_or_path=observer_name,
@@ -90,6 +93,7 @@ class BinocularsDetector(BaseDetector):
             use_bfloat16=use_bfloat16,
             max_token_observed=max_token_observed,
             mode=mode,
+            device=device,
         )
 
         # Allow custom threshold override
@@ -131,12 +135,10 @@ class BinocularsDetector(BaseDetector):
     def _detect_single(self, text: str) -> Dict:
         """Detect single text."""
         binoculars_score = self.detector.compute_score(text)
-        prediction = self.detector.predict(text)
 
-        # Binoculars: lower score = more likely AI
-        # For summarize.py: higher score = more likely AI
         threshold = self.detector.threshold
         label = 1 if binoculars_score < threshold else 0
+        prediction = "Most likely AI-generated" if label == 1 else "Most likely human-generated"
 
         return {
             "text": text,
@@ -152,14 +154,13 @@ class BinocularsDetector(BaseDetector):
 
     def _detect_batch(self, texts: List[str]) -> List[Dict]:
         """Detect batch of texts. Binoculars natively supports batch."""
-        # Binoculars compute_score accepts list and returns list
         binoculars_scores = self.detector.compute_score(texts)
-        predictions = self.detector.predict(texts)
 
         threshold = self.detector.threshold
         results = []
-        for text, score, prediction in zip(texts, binoculars_scores, predictions):
+        for text, score in zip(texts, binoculars_scores):
             label = 1 if score < threshold else 0
+            prediction = "Most likely AI-generated" if label == 1 else "Most likely human-generated"
             results.append(
                 {
                     "text": text,

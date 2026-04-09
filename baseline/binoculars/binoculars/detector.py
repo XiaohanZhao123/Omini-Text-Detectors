@@ -32,19 +32,33 @@ class Binoculars(object):
         use_bfloat16: bool = True,
         max_token_observed: int = 512,
         mode: str = "low-fpr",
+        device: str = None,
     ) -> None:
         assert_tokenizer_consistency(observer_name_or_path, performer_name_or_path)
+
+        # Resolve devices: accept "cuda:0", "cuda:0,cuda:1", or None
+        if device is not None:
+            if "," in device:
+                parts = [d.strip() for d in device.split(",")]
+                self.device_1 = parts[0]
+                self.device_2 = parts[1] if len(parts) > 1 else parts[0]
+            else:
+                self.device_1 = device
+                self.device_2 = device
+        else:
+            self.device_1 = DEVICE_1
+            self.device_2 = DEVICE_2
 
         self.change_mode(mode)
         self.observer_model = AutoModelForCausalLM.from_pretrained(
             observer_name_or_path,
-            device_map={"": DEVICE_1},
+            device_map={"": self.device_1},
             torch_dtype=torch.bfloat16 if use_bfloat16 else torch.float32,
             token=huggingface_config["TOKEN"],
         )
         self.performer_model = AutoModelForCausalLM.from_pretrained(
             performer_name_or_path,
-            device_map={"": DEVICE_2},
+            device_map={"": self.device_2},
             torch_dtype=torch.bfloat16 if use_bfloat16 else torch.float32,
             token=huggingface_config["TOKEN"],
         )
@@ -78,9 +92,9 @@ class Binoculars(object):
 
     @torch.inference_mode()
     def _get_logits(self, encodings: transformers.BatchEncoding) -> torch.Tensor:
-        observer_logits = self.observer_model(**encodings.to(DEVICE_1)).logits
-        performer_logits = self.performer_model(**encodings.to(DEVICE_2)).logits
-        if DEVICE_1 != "cpu":
+        observer_logits = self.observer_model(**encodings.to(self.device_1)).logits
+        performer_logits = self.performer_model(**encodings.to(self.device_2)).logits
+        if self.device_1 != "cpu":
             torch.cuda.synchronize()
         return observer_logits, performer_logits
 
@@ -92,9 +106,9 @@ class Binoculars(object):
         observer_logits, performer_logits = self._get_logits(encodings)
         ppl = perplexity(encodings, performer_logits)
         x_ppl = entropy(
-            observer_logits.to(DEVICE_1),
-            performer_logits.to(DEVICE_1),
-            encodings.to(DEVICE_1),
+            observer_logits.to(self.device_1),
+            performer_logits.to(self.device_1),
+            encodings.to(self.device_1),
             self.tokenizer.pad_token_id,
         )
         binoculars_scores = ppl / x_ppl

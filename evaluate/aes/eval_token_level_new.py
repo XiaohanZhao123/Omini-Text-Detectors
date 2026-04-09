@@ -281,6 +281,20 @@ def extract_labels(detector_name, detector, result, text, num_gt_words):
             "error": meta.get("error"),
         }
 
+    elif detector_name == "miec":
+        word_labels = meta.get("word_labels", [])
+        if len(word_labels) != num_gt_words:
+            return empty(f"count_mismatch:{len(word_labels)}vs{num_gt_words}")
+        pred = [1 if l == "ai" else 0 for l in word_labels]
+        word_logits = meta.get("word_logits", [])
+        confidences = [float(wl[1]) for wl in word_logits] if len(word_logits) == len(pred) else None
+        return {
+            "pred_labels": pred,
+            "word_confidences": confidences,
+            "ai_intervals": meta.get("ai_intervals", []),
+            "error": meta.get("error"),
+        }
+
     else:
         raise ValueError(f"Unknown detector: {detector_name}")
 
@@ -481,7 +495,7 @@ def main():
     parser.add_argument("--essays-path", type=str, default=str(DEFAULT_ESSAYS))
     parser.add_argument("--abstracts-path", type=str, default=str(DEFAULT_ABSTRACTS))
     parser.add_argument("--methods", nargs="+", default=["damasha", "gigacheck", "seqxgpt"],
-                        choices=["damasha", "gigacheck", "seqxgpt", "mgtd", "detectllm"])
+                        choices=["damasha", "gigacheck", "seqxgpt", "mgtd", "detectllm", "miec"])
     parser.add_argument("--split", default="test", choices=["train", "dev", "test", "all"])
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--feature-devices", nargs="+", default=None,
@@ -499,6 +513,9 @@ def main():
     parser.add_argument("--split-mode", default="custom", choices=["custom", "csv"],
                         help="Split mode: custom=80/10/10 by essay_id (matches DeBERTa), csv=use CSV column")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for custom split")
+    parser.add_argument("--detectllm-metric", default=None,
+                        choices=["lrr", "logrank", "entropy", "likelihood", "rank"],
+                        help="DetectLLM: override metric (default: use config)")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -549,6 +566,8 @@ def main():
                                             split_mode=args.split_mode, seed=args.seed)
                 cal_texts = [r["text"] for r in cal_records if r["version"] == "v0"][:20]
                 extra["_calibrate_texts"] = cal_texts
+                if args.detectllm_metric:
+                    extra["metric"] = args.detectllm_metric
 
             results = evaluate_method(method, records, args.device, extra)
 

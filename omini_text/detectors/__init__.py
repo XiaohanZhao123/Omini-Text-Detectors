@@ -77,6 +77,7 @@ def __getattr__(name):
         "RoFTBoundaryDetector": "omini_text.detectors.roft_boundary_detector",
         "SeqXGPTDetector": "omini_text.detectors.seqxgpt_detector",
         "ShortPHDDetector": "omini_text.detectors.short_phd_detector",
+        "MIECDetector": "omini_text.detectors.miec_detector",
     }
     if name in _lazy_imports:
         import importlib
@@ -106,4 +107,5 @@ __all__ = [
     "RoFTBoundaryDetector",
     "SeqXGPTDetector",
     "ShortPHDDetector",
+    "MIECDetector",
 ]
