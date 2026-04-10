@@ -1,0 +1,20 @@
+# AdaLoc: Machine-Generated Text Localization (ACL Findings 2024)
+# Sentence-level MGT localization using RoBERTa + lightweight adapter with sliding window
+# Paper: https://arxiv.org/abs/2402.11744
+# GitHub: https://github.com/Zhongping-Zhang/MGT_Localization
+
+model: adaloc
+
+# Model Configuration
+roberta_model: roberta-large-openai-detector  # Base RoBERTa detector for feature extraction
+checkpoint_path: null                          # Path to trained AdaLoc sentence head (.pkl)
+hidden_size: 1024                              # RoBERTa-large hidden size
+num_labels: 3                                  # Sliding window output size (= window_size)
+dropout: 0.1
+
+# Sliding window parameters
+window_size: 3    # Number of sentences per window
+window_step: 1    # Step size between windows
+
+# Device
+device: auto

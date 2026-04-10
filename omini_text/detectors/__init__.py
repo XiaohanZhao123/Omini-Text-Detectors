@@ -78,6 +78,9 @@ def __getattr__(name):
         "SeqXGPTDetector": "omini_text.detectors.seqxgpt_detector",
         "ShortPHDDetector": "omini_text.detectors.short_phd_detector",
         "MIECDetector": "omini_text.detectors.miec_detector",
+        "GLCLiCDetector": "omini_text.detectors.gl_clic_detector",
+        "SenDetEXDetector": "omini_text.detectors.sendetex_detector",
+        "AdaLocDetector": "omini_text.detectors.adaloc_detector",
     }
     if name in _lazy_imports:
         import importlib
@@ -108,4 +111,7 @@ __all__ = [
     "SeqXGPTDetector",
     "ShortPHDDetector",
     "MIECDetector",
+    "GLCLiCDetector",
+    "SenDetEXDetector",
+    "AdaLocDetector",
 ]

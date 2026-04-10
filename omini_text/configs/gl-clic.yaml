@@ -1,0 +1,25 @@
+# GL-CLiC: Global-Local Coherence and Lexical Complexity (IJCNLP-AACL 2025)
+# Sentence-level AI-generated text detection using coherence and lexical complexity signals
+# Paper: https://aclanthology.org/2025.ijcnlp-long.188/
+# GitHub: https://github.com/adirizq/gl-clic
+
+model: gl-clic
+
+# Model Configuration
+backbone: microsoft/deberta-v3-base
+checkpoint_path: null  # Path to trained GL-CLiC checkpoint (.ckpt)
+
+# Feature flags (must match the checkpoint's training configuration)
+global_coherence: true
+local_coherence: true
+global_lexical: true
+local_lexical: true
+
+# Dataset mode: "binary" (SeqXGPT-Bench style) or "coauthor" (3-class)
+dataset_mode: binary
+
+# Device
+device: auto
+
+# Inference
+max_length: 512
