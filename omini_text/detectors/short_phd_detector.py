@@ -79,7 +79,7 @@ class ShortPHDDetector(BaseDetector):
         cache_dir = config.get(
             "cache_dir", str(Path(__file__).parent.parent.parent / "cache")
         )
-        device_str = config.get("device", "0")
+        device_str = str(config.get("device", "0"))
         seed = config.get("seed", 42)
 
         self.max_length = config.get("max_length", 1000)
@@ -94,15 +94,23 @@ class ShortPHDDetector(BaseDetector):
         torch.cuda.manual_seed_all(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
 
+        # Normalize device string: accept "0", "cuda:0", or "auto"
+        if device_str.startswith("cuda:"):
+            device_spec = device_str
+        elif device_str == "auto" or device_str == "cpu":
+            device_spec = "cuda:0" if torch.cuda.is_available() else "cpu"
+        else:
+            device_spec = f"cuda:{device_str}"
+
         print(f"\nInitializing Short-PHD Detector")
         print(f"   Base LM: {base_lm_name}")
         print(f"   Truncation: {self.truncation_length or 'None (use full text)'}")
         print(f"   Threshold: {self.threshold}")
-        print(f"   Device: cuda:{device_str}\n")
+        print(f"   Device: {device_spec}\n")
 
         # Load model and tokenizer
         self.device = (
-            torch.device(f"cuda:{device_str}")
+            torch.device(device_spec)
             if torch.cuda.is_available()
             else torch.device("cpu")
         )

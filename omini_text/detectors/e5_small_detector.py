@@ -85,13 +85,23 @@ class E5SmallDetector(BaseDetector):
 
     def _detect_single(self, text: str) -> Dict:
         """Detect single text."""
-        result = self.pipe(text, truncation=True, max_length=512)[0]
+        import torch
 
-        # Extract probability for AI-generated class (LABEL_1)
-        if result["label"] == "LABEL_1":
-            prob = result["score"]
-        else:  # LABEL_0 (human-written)
-            prob = 1.0 - result["score"]
+        tokenizer = self.pipe.tokenizer
+        model = self.pipe.model
+
+        inputs = tokenizer(
+            text, truncation=True, max_length=512, return_tensors="pt",
+        ).to(model.device)
+
+        with torch.no_grad():
+            outputs = model(**inputs)
+            logits = outputs.logits[0]  # (2,) raw logits
+
+        # LABEL_0 = human, LABEL_1 = AI
+        logits_list = logits.cpu().tolist()  # [logit_human, logit_ai]
+        probs = torch.softmax(logits, dim=-1)
+        prob = probs[1].item()  # P(AI)
 
         label = 1 if prob >= self.threshold else 0
 
@@ -99,7 +109,11 @@ class E5SmallDetector(BaseDetector):
             "text": text,
             "label": label,
             "score": float(prob),
-            "metadata": {"num_tokens": len(text.split())},
+            "metadata": {
+                "logits": logits_list,
+                "threshold": self.threshold,
+                "num_tokens": len(text.split()),
+            },
         }
 
     def _detect_batch(self, texts: List[str]) -> List[Dict]:

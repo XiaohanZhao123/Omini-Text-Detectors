@@ -154,7 +154,8 @@ class DesklibDetector(BaseDetector):
 
         with torch.no_grad():
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs["logits"]
+            logits = outputs["logits"]  # (1, 1) single logit
+            logit_val = logits.item()
             probability = torch.sigmoid(logits).item()
 
         label = 1 if probability >= self.threshold else 0
@@ -163,7 +164,11 @@ class DesklibDetector(BaseDetector):
             "text": text,
             "label": label,
             "score": float(probability),
-            "metadata": {"num_tokens": len(text.split())},
+            "metadata": {
+                "logits": [float(-logit_val), float(logit_val)],  # [human, AI]
+                "threshold": self.threshold,
+                "num_tokens": len(text.split()),
+            },
         }
 
     def _detect_batch(self, texts: List[str]) -> List[Dict]:

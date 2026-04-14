@@ -104,10 +104,13 @@ class RADARDetector(BaseDetector):
         # Run inference
         with torch.no_grad():
             outputs = self.model(**inputs)
-            logits = outputs.logits
+            logits = outputs.logits  # (1, 2) — [AI, human]
             probs = F.softmax(logits, dim=-1)
             # RADAR uses [AI=0, human=1] label convention
             ai_prob = probs[0, 0].item()
+
+        # Reorder to [human, AI] for unified interface
+        logits_list = [logits[0, 1].item(), logits[0, 0].item()]
 
         label = 1 if ai_prob >= self.threshold else 0
 
@@ -115,7 +118,11 @@ class RADARDetector(BaseDetector):
             "text": text,
             "label": label,
             "score": float(ai_prob),
-            "metadata": {"model": self.model_path, "threshold": self.threshold},
+            "metadata": {
+                "logits": logits_list,
+                "model": self.model_path,
+                "threshold": self.threshold,
+            },
         }
 
     def _detect_batch(self, texts: List[str]) -> List[Dict]:

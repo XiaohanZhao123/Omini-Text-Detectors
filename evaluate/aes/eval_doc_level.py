@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
-"""Document-level evaluation of detectors on AES data.
+"""Document-level evaluation of detectors on AES v0-v8 data.
 
-For detectors that produce only document-level scores (no per-word labels),
-evaluate as binary classification: v0=human (label 0), v1-v8=has AI (label 1).
+Binary classification: v0 = human (label 0), v1-v8 = AI (label 1).
+Saves raw detector outputs, threshold, and full config for reproducibility.
 
-Also compute score correlation with GT AI token ratio.
+Supports arbitrary CSV files with the standard v2 prepared format
+(columns: essay_id, version, split, text_clean, tok_labels, AI_token_ratio).
 
 Usage:
-    conda run -n omni-text python evaluate/aes/eval_doc_level.py \
-        --methods roberta-openai radar e5-small ood-llm-detect \
-        --device cuda:6 --split test
+    # Run on all 4 domains (v2 prepared data)
+    python evaluate/aes/eval_doc_level.py \
+        --methods short-phd fast-detectgpt \
+        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \
+             data_local/external/sondos/v2/prepared/csv/abstract.csv \
+             data_local/external/sondos/v2/prepared/csv/news.csv \
+             data_local/external/sondos/v2/prepared/csv/report.csv \
+        --split test --device cuda:0
+
+    # Run on a single domain
+    python evaluate/aes/eval_doc_level.py \
+        --methods short-phd --csv path/to/essay.csv --split test
 """
 
 import argparse
@@ -19,58 +29,46 @@ import json
 import sys
 import time
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_ESSAYS = PROJECT_ROOT / "draft" / "essay_data_03_22" / "AI_detection_data" / "essays_v0_v8_spans_finall_eval.csv"
-DEFAULT_ABSTRACTS = PROJECT_ROOT / "draft" / "essay_data_03_22" / "AI_detection_data" / "abstract_ai_eval.csv"
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "aes_doc_eval"
 
 
-def apply_custom_split(df, split, seed=0):
-    """80/10/10 split by essay_id (matches train_token_detector.py)."""
-    ids = np.array(sorted(df['essay_id'].unique()))
-    rng = np.random.RandomState(seed)
-    rng.shuffle(ids)
-    n = len(ids)
-    n_test = round(n * 0.1)
-    n_dev = n_test
-    n_train = n - n_dev - n_test
-    if split == 'train':
-        selected = set(ids[:n_train])
-    elif split == 'dev':
-        selected = set(ids[n_train:n_train + n_dev])
-    elif split == 'test':
-        selected = set(ids[n_train + n_dev:])
-    else:
-        return df
-    return df[df['essay_id'].isin(selected)]
+def load_data(csv_path, split=None, max_samples=None):
+    """Load CSV and produce evaluation records.
 
-
-def load_data(csv_path, split=None, seed=0, max_samples=None):
+    Uses the split column already present in the data (from Sondos).
+    """
     df = pd.read_csv(csv_path)
-    if split:
-        df = apply_custom_split(df, split, seed=seed)
+
+    # Use the split column from the data
+    if split and "split" in df.columns:
+        df = df[df["split"] == split].reset_index(drop=True)
 
     records = []
     for _, row in df.iterrows():
-        tok_labels = ast.literal_eval(row['tok_labels'])
+        tok_labels = ast.literal_eval(row["tok_labels"])
         ai_ratio = sum(tok_labels) / len(tok_labels) if tok_labels else 0
-        # Binary doc label: has ANY AI content?
         doc_label = 1 if ai_ratio > 0 else 0
 
         records.append({
-            'essay_id': str(row['essay_id']),
-            'version': row['version'],
-            'text': row['text_clean'],
-            'ai_ratio_gt': row['AI_token_ratio'],
-            'doc_label': doc_label,
+            "essay_id": str(row["essay_id"]),
+            "version": row["version"],
+            "text": row["text_clean"],
+            "ai_ratio_gt": float(row["AI_token_ratio"]),
+            "doc_label": doc_label,
+            "domain": row.get("domain", ""),
+            "ai_model": row.get("ai_model", ""),
+            "operation": row.get("operation", ""),
         })
 
         if max_samples and len(records) >= max_samples:
@@ -79,8 +77,84 @@ def load_data(csv_path, split=None, seed=0, max_samples=None):
     return records
 
 
+def get_detector_config(method, device):
+    """Load the YAML config for a detector, including threshold."""
+    config_path = PROJECT_ROOT / "omini_text" / "configs" / f"{method}.yaml"
+    if config_path.exists():
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+    else:
+        config = {}
+    config["device"] = device
+    return config
+
+
+# ============================================================================
+# Unified confidence / threshold extraction
+# ============================================================================
+
+# Detectors whose `score` is already P(AI) in [0, 1]
+_PROB_DETECTORS = {
+    "fast-detectgpt", "e5-small", "radar", "desklib", "roberta-openai",
+    "ood-llm-detect", "detectllm",
+}
+
+# Detectors whose `score` is a coverage/ratio in [0, 1]
+_RATIO_DETECTORS = {"seqxgpt", "mgtd"}
+
+
+def _extract_confidence(method: str, result: dict) -> float | None:
+    """Return a unified P(AI) confidence in [0, 1].
+
+    For detectors that already output a probability or ratio, pass through.
+    For others (short-phd, binoculars, dna-detectllm), apply a sigmoid or
+    store the raw score and let downstream analysis recalibrate.
+    """
+    score = result.get("score")
+    if score is None:
+        return None
+
+    if method in _PROB_DETECTORS or method in _RATIO_DETECTORS:
+        return float(score)
+
+    if method == "short-phd":
+        # PHD score: higher = more AI.  Sigmoid centered at threshold.
+        threshold = result.get("metadata", {}).get("threshold", 15.0)
+        return float(1 / (1 + np.exp(-(score - threshold))))
+
+    if method == "binoculars":
+        # binoculars_detector already negates the score so higher = more AI.
+        # Apply sigmoid centered at 0 for a rough probability.
+        return float(1 / (1 + np.exp(-score)))
+
+    if method == "dna-detectllm":
+        # Same negation convention as binoculars.
+        return float(1 / (1 + np.exp(-score)))
+
+    if method == "gigacheck":
+        return float(score)
+
+    # Fallback: return raw score as-is
+    return float(score)
+
+
+def _extract_threshold(method: str, result: dict, config: dict) -> float | None:
+    """Extract the threshold actually used for this prediction."""
+    # Try metadata first (some detectors embed it per-sample)
+    meta = result.get("metadata", {})
+    if "threshold" in meta:
+        return float(meta["threshold"])
+    # Fall back to config
+    if "threshold" in config:
+        return float(config["threshold"])
+    return None
+
+
 def evaluate_method(method, records, device):
+    """Run detector and return predictions with full raw outputs."""
     from omini_text.core import pipeline
+
+    config = get_detector_config(method, device)
 
     print(f"\n{'='*60}")
     print(f"  Loading {method} (device={device})")
@@ -98,88 +172,123 @@ def evaluate_method(method, records, device):
             print(f"  [{method}] {i+1}/{len(records)} ({rate:.1f} docs/s)")
 
         try:
-            result = pipe(rec['text'])
+            raw_result = pipe(rec["text"])
+            # Save full raw output but drop the text field (recoverable via essay_id)
+            raw_for_save = _sanitize(raw_result)
+            raw_for_save.pop("text", None)
             results.append({
-                'essay_id': rec['essay_id'],
-                'version': rec['version'],
-                'ai_ratio_gt': rec['ai_ratio_gt'],
-                'doc_label_gt': rec['doc_label'],
-                'pred_label': result['label'],
-                'pred_score': result['score'],
+                "essay_id": rec["essay_id"],
+                "version": rec["version"],
+                "domain": rec["domain"],
+                "ai_model": rec["ai_model"],
+                "operation": rec["operation"],
+                "ai_ratio_gt": rec["ai_ratio_gt"],
+                "doc_label_gt": rec["doc_label"],
+                "pred_label": raw_result["label"],
+                "pred_score": raw_result.get("score"),
+                "confidence": _extract_confidence(method, raw_result),
+                "threshold": _extract_threshold(method, raw_result, config),
+                "raw_output": raw_for_save,
             })
         except Exception as e:
             results.append({
-                'essay_id': rec['essay_id'],
-                'version': rec['version'],
-                'ai_ratio_gt': rec['ai_ratio_gt'],
-                'doc_label_gt': rec['doc_label'],
-                'pred_label': 0,
-                'pred_score': 0.0,
-                'error': str(e),
+                "essay_id": rec["essay_id"],
+                "version": rec["version"],
+                "domain": rec["domain"],
+                "ai_model": rec["ai_model"],
+                "operation": rec["operation"],
+                "ai_ratio_gt": rec["ai_ratio_gt"],
+                "doc_label_gt": rec["doc_label"],
+                "pred_label": 0,
+                "pred_score": 0.0,
+                "confidence": None,
+                "threshold": None,
+                "raw_output": None,
+                "error": str(e),
             })
 
     elapsed = time.time() - t0
-    n_errors = sum(1 for r in results if 'error' in r)
+    n_errors = sum(1 for r in results if "error" in r)
     print(f"  [{method}] Done: {len(records)} docs in {elapsed:.1f}s, {n_errors} errors")
 
     pipe.cleanup()
     gc.collect()
 
-    return results
+    return results, config
+
+
+def _sanitize(obj):
+    """Make a detector result JSON-serializable."""
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating, float)):
+        v = float(obj)
+        if np.isnan(v) or np.isinf(v):
+            return None
+        return v
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
 
 
 def compute_metrics(results):
     """Compute overall and per-version metrics."""
-    y_true = [r['doc_label_gt'] for r in results]
-    y_pred = [r['pred_label'] for r in results]
-    y_score = [r['pred_score'] for r in results]
+    valid = [r for r in results if "error" not in r]
+    if not valid:
+        return {}, {}
+
+    y_true = [r["doc_label_gt"] for r in valid]
+    y_pred = [r["pred_label"] for r in valid]
+    y_score = [r["pred_score"] for r in valid]
 
     overall = {
-        'accuracy': accuracy_score(y_true, y_pred),
-        'f1_macro': f1_score(y_true, y_pred, average='macro', zero_division=0),
-        'ai_precision': precision_score(y_true, y_pred, pos_label=1, zero_division=0),
-        'ai_recall': recall_score(y_true, y_pred, pos_label=1, zero_division=0),
-        'ai_f1': f1_score(y_true, y_pred, pos_label=1, zero_division=0),
-        'n': len(results),
+        "accuracy": accuracy_score(y_true, y_pred),
+        "f1_macro": f1_score(y_true, y_pred, average="macro", zero_division=0),
+        "ai_precision": precision_score(y_true, y_pred, pos_label=1, zero_division=0),
+        "ai_recall": recall_score(y_true, y_pred, pos_label=1, zero_division=0),
+        "ai_f1": f1_score(y_true, y_pred, pos_label=1, zero_division=0),
+        "n": len(valid),
+        "n_errors": len(results) - len(valid),
     }
 
-    # AUROC if both classes present
-    if len(set(y_true)) > 1:
-        overall['auroc'] = roc_auc_score(y_true, y_score)
+    if len(set(y_true)) > 1 and all(s is not None for s in y_score):
+        overall["auroc"] = roc_auc_score(y_true, y_score)
 
-    # Score correlation with GT AI ratio
-    gt_ratios = [r['ai_ratio_gt'] for r in results]
-    if np.std(gt_ratios) > 0 and np.std(y_score) > 0:
-        overall['score_ratio_corr'] = float(np.corrcoef(gt_ratios, y_score)[0, 1])
+    gt_ratios = [r["ai_ratio_gt"] for r in valid]
+    scores_clean = [s for s in y_score if s is not None]
+    if len(scores_clean) == len(gt_ratios) and np.std(gt_ratios) > 0 and np.std(scores_clean) > 0:
+        overall["score_ratio_corr"] = float(np.corrcoef(gt_ratios, scores_clean)[0, 1])
 
     # Per-version
     by_version = defaultdict(list)
-    for r in results:
-        by_version[r['version']].append(r)
+    for r in valid:
+        by_version[r["version"]].append(r)
 
     version_metrics = {}
     for ver in sorted(by_version.keys()):
         vr = by_version[ver]
-        yt = [r['doc_label_gt'] for r in vr]
-        yp = [r['pred_label'] for r in vr]
-        ys = [r['pred_score'] for r in vr]
+        yt = [r["doc_label_gt"] for r in vr]
+        yp = [r["pred_label"] for r in vr]
+        ys = [r["pred_score"] for r in vr]
 
         vm = {
-            'accuracy': accuracy_score(yt, yp),
-            'mean_score': float(np.mean(ys)),
-            'n': len(vr),
+            "accuracy": accuracy_score(yt, yp),
+            "mean_score": float(np.mean([s for s in ys if s is not None])) if any(s is not None for s in ys) else None,
+            "n": len(vr),
         }
 
-        # AI metrics only for versions with AI content (v1-v8)
         if sum(yt) > 0:
-            vm['ai_precision'] = precision_score(yt, yp, pos_label=1, zero_division=0)
-            vm['ai_recall'] = recall_score(yt, yp, pos_label=1, zero_division=0)
-            vm['ai_f1'] = f1_score(yt, yp, pos_label=1, zero_division=0)
+            vm["ai_precision"] = precision_score(yt, yp, pos_label=1, zero_division=0)
+            vm["ai_recall"] = recall_score(yt, yp, pos_label=1, zero_division=0)
+            vm["ai_f1"] = f1_score(yt, yp, pos_label=1, zero_division=0)
 
-        # Human metrics only for v0
         if sum(1 - np.array(yt)) > 0:
-            vm['human_precision'] = precision_score(yt, yp, pos_label=0, zero_division=0)
-            vm['human_recall'] = recall_score(yt, yp, pos_label=0, zero_division=0)
+            vm["human_precision"] = precision_score(yt, yp, pos_label=0, zero_division=0)
+            vm["human_recall"] = recall_score(yt, yp, pos_label=0, zero_division=0)
 
         version_metrics[ver] = vm
 
@@ -187,79 +296,106 @@ def compute_metrics(results):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Document-level eval on AES data")
-    parser.add_argument("--methods", nargs="+", required=True)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--methods", nargs="+", required=True,
+                        help="Detector names (e.g. short-phd fast-detectgpt)")
+    parser.add_argument("--csv", nargs="+", required=True,
+                        help="One or more CSV files (v2 prepared format)")
     parser.add_argument("--device", default="cuda:0")
-    parser.add_argument("--split", default="test", choices=["train", "dev", "test", "all"])
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--essays-path", default=str(DEFAULT_ESSAYS))
-    parser.add_argument("--abstracts-path", default=str(DEFAULT_ABSTRACTS))
-    parser.add_argument("--datasets", nargs="+", default=["essays", "abstracts"],
-                        choices=["essays", "abstracts"])
+    parser.add_argument("--split", default="test",
+                        choices=["train", "dev", "test", "all"])
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--max-samples", type=int, default=None)
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
+    split = None if args.split == "all" else args.split
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_dir = Path(args.output_dir) / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    split = None if args.split == "all" else args.split
+    print(f"Output: {output_dir}")
+    print(f"Methods: {args.methods}")
+    print(f"CSVs: {args.csv}")
+    print(f"Split: {args.split}")
+    print()
 
-    dataset_paths = {}
-    if "essays" in args.datasets:
-        dataset_paths["essays"] = args.essays_path
-    if "abstracts" in args.datasets:
-        dataset_paths["abstracts"] = args.abstracts_path
-
-    all_results = {}
+    all_summaries = {}
 
     for method in args.methods:
-        for ds_name, ds_path in dataset_paths.items():
+        for csv_path_str in args.csv:
+            csv_path = Path(csv_path_str)
+            ds_name = csv_path.stem  # e.g. "essay", "abstract"
+
             print(f"\n{'#'*60}")
             print(f"  {method.upper()} on {ds_name.upper()} (split={args.split})")
             print(f"{'#'*60}")
 
-            records = load_data(ds_path, split=split, seed=args.seed,
+            records = load_data(csv_path, split=split,
                                 max_samples=args.max_samples)
             print(f"  Loaded {len(records)} records")
 
             if not records:
                 continue
 
-            results = evaluate_method(method, records, args.device)
+            results, config = evaluate_method(method, records, args.device)
             overall, by_version = compute_metrics(results)
 
+            # Print summary
             print(f"\n  --- {method}/{ds_name} Overall ---")
             for k, v in overall.items():
                 print(f"    {k}: {v:.4f}" if isinstance(v, float) else f"    {k}: {v}")
 
             print(f"\n  --- By Version ---")
             for ver, vm in by_version.items():
-                ai_f1 = vm.get('ai_f1', '-')
+                ai_f1 = vm.get("ai_f1", "-")
                 if isinstance(ai_f1, float):
                     ai_f1 = f"{ai_f1:.3f}"
-                print(f"    {ver}: acc={vm['accuracy']:.3f} score={vm['mean_score']:.3f} "
+                mean_s = f"{vm['mean_score']:.3f}" if vm.get("mean_score") is not None else "-"
+                print(f"    {ver}: acc={vm['accuracy']:.3f} score={mean_s} "
                       f"ai_f1={ai_f1} n={vm['n']}")
 
-            # Save
+            # Save predictions with raw outputs
+            pred_dir = output_dir / ds_name
+            pred_dir.mkdir(parents=True, exist_ok=True)
+            pred_path = pred_dir / f"{method}_predictions.jsonl"
+            with open(pred_path, "w") as f:
+                for r in results:
+                    f.write(json.dumps(r, default=str) + "\n")
+
+            # Save run config (threshold, settings, etc.)
+            run_meta = {
+                "method": method,
+                "dataset": ds_name,
+                "csv_path": str(csv_path),
+                "split": args.split,
+                "device": args.device,
+                "timestamp": timestamp,
+                "n_records": len(records),
+                "config": config,
+                "overall_metrics": overall,
+                "per_version_metrics": by_version,
+            }
+            meta_path = pred_dir / f"{method}_run_meta.json"
+            with open(meta_path, "w") as f:
+                json.dump(run_meta, f, indent=2, default=str)
+
+            print(f"\n  Saved: {pred_path}")
+            print(f"  Saved: {meta_path}")
+
             key = f"{method}_{ds_name}"
-            all_results[key] = {
-                'overall': overall,
-                'by_version': by_version,
+            all_summaries[key] = {
+                "overall": overall,
+                "by_version": by_version,
             }
 
-            # Save predictions
-            pred_path = output_dir / f"{method}_{ds_name}_predictions.jsonl"
-            with open(pred_path, 'w') as f:
-                for r in results:
-                    f.write(json.dumps(r) + '\n')
-            print(f"\n  Saved: {pred_path}")
-
-    # Save summary
-    summary_path = output_dir / "doc_level_summary.json"
-    with open(summary_path, 'w') as f:
-        json.dump(all_results, f, indent=2, default=str)
-    print(f"\nSaved summary: {summary_path}")
+    # Save global summary
+    summary_path = output_dir / "summary.json"
+    with open(summary_path, "w") as f:
+        json.dump(all_summaries, f, indent=2, default=str)
+    print(f"\nAll results: {output_dir}")
 
 
 if __name__ == "__main__":
