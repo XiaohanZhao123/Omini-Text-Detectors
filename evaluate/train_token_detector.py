@@ -627,7 +627,7 @@ def train(args):
     # --- Model ---
     print("\nLoading model...")
     config = AutoConfig.from_pretrained(args.model)
-    encoder = AutoModel.from_pretrained(args.model)
+    encoder = AutoModel.from_pretrained(args.model, torch_dtype=torch.float32)
     model = _build_model(args, config, encoder)
     model = model.to(device)
 
@@ -744,8 +744,10 @@ ARCH_DEFAULTS = {
     },
     'gl-clic': {
         # GL-CLiC train.py (IJCNLP-AACL 2025)
+        # Paper used batch_size=2 for full documents with auxiliary features.
+        # For sentence-only classification, batch_size=32 is more appropriate.
         'epochs': 10,
-        'batch_size': 2,
+        'batch_size': 32,
         'lr': 1e-4,
         'dropout': 0.3,
         'weight_decay': 0.01,
