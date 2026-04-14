@@ -11,10 +11,11 @@ model_path: MayZhou/e5-small-lora-ai-generated-detector # HuggingFace path or lo
 device: auto # Options: auto (recommended), cuda, cpu
 
 # Detection Configuration
-threshold: 0.5 # HF card does not specify a threshold; 0.5 is the sigmoid default.
-               # Empirically matches the HF card's 93.9% RAID accuracy at 0.5 (we hit 96.63);
-               # the earlier 0.85 hardcoded default missed by ~10 pts. See
-               # evaluate/reproductions/REPRODUCTION_RESULTS.md and WRAPPER_FIXES_TODO.md (2026-04-14).
+threshold: 0.5 # HF library default (sigmoid argmax / desklib convention). The
+               # HF card publishes no explicit threshold; its "93.9% / 85.7% / 99.3%"
+               # numbers are RAID-leaderboard-protocol (Accuracy @ FPR=5%, threshold
+               # set dynamically per-domain) — reproduce those via
+               # `evaluate/raid_leaderboard_harness.py`, not via a fixed threshold.
 
 # Performance Notes:
 # - Inference: ~10ms per text (GPU), ~50ms (CPU)
