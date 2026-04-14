@@ -2,30 +2,33 @@
 """Document-level evaluation of detectors on AES v0-v8 data.
 
 Binary classification: v0 = human (label 0), v1-v8 = AI (label 1).
-Saves raw detector outputs, threshold, and full config for reproducibility.
 
-Supports arbitrary CSV files with the standard v2 prepared format
-(columns: essay_id, version, split, text_clean, tok_labels, AI_token_ratio).
+Output format (aligned with teammate's omnitext_results):
+  {detector}_{dataset}_{field}_{model_short}_{timestamp}/
+      predictions.jsonl   — full CSV row + detection_* fields
+      summary.json        — rich metrics (confusion, AUROC, AUPR, by_version, by_operation)
+      run_config.json     — detector config snapshot
 
 Usage:
-    # Run on all 4 domains (v2 prepared data)
-    python evaluate/aes/eval_doc_level.py \
-        --methods short-phd fast-detectgpt \
-        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \
-             data_local/external/sondos/v2/prepared/csv/abstract.csv \
-             data_local/external/sondos/v2/prepared/csv/news.csv \
-             data_local/external/sondos/v2/prepared/csv/report.csv \
+    # Run on a single CSV (one AI model per file, matching teammate's convention)
+    uv run python evaluate/aes/eval_doc_level.py \\
+        --methods fast-detectgpt \\
+        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \\
         --split test --device cuda:0
 
-    # Run on a single domain
-    python evaluate/aes/eval_doc_level.py \
-        --methods short-phd --csv path/to/essay.csv --split test
+    # Run on multiple CSVs
+    uv run python evaluate/aes/eval_doc_level.py \\
+        --methods fast-detectgpt \\
+        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \\
+             data_local/external/sondos/v2/prepared/csv/abstract.csv \\
+        --split test --device cuda:0
 """
 
 import argparse
 import ast
 import gc
 import json
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -35,7 +38,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -43,45 +54,63 @@ sys.path.insert(0, str(PROJECT_ROOT))
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "aes_doc_eval"
 
 
-def load_data(csv_path, split=None, max_samples=None):
-    """Load CSV and produce evaluation records.
+# ============================================================================
+# Data loading
+# ============================================================================
 
-    Uses the split column already present in the data (from Sondos).
+def load_data(csv_path, split=None, max_samples=None):
+    """Load CSV and return full DataFrame with a computed _doc_label column.
+
+    Preserves ALL original CSV columns for verbatim output in predictions.jsonl.
     """
     df = pd.read_csv(csv_path)
 
-    # Use the split column from the data
     if split and "split" in df.columns:
         df = df[df["split"] == split].reset_index(drop=True)
 
-    records = []
-    for _, row in df.iterrows():
+    # Compute binary doc label: 1 if any AI token present
+    def _doc_label(tok_labels_str):
         try:
-            tok_labels = ast.literal_eval(str(row["tok_labels"]))
+            tl = ast.literal_eval(str(tok_labels_str))
+            return 1 if (tl and sum(tl) > 0) else 0
         except (ValueError, SyntaxError):
-            tok_labels = []
-        ai_ratio = sum(tok_labels) / len(tok_labels) if tok_labels else 0
-        doc_label = 1 if ai_ratio > 0 else 0
+            return 0
 
-        records.append({
-            "essay_id": str(row["essay_id"]),
-            "version": row["version"],
-            "text": row["text_clean"],
-            "ai_ratio_gt": float(row["AI_token_ratio"]),
-            "doc_label": doc_label,
-            "domain": row.get("domain", ""),
-            "ai_model": row.get("ai_model", ""),
-            "operation": row.get("operation", ""),
-        })
+    df["_doc_label"] = df["tok_labels"].apply(_doc_label)
 
-        if max_samples and len(records) >= max_samples:
-            break
+    if max_samples:
+        df = df.head(max_samples)
 
-    return records
+    return df
+
+
+def get_model_column(df):
+    """Find the AI model column name in the DataFrame."""
+    for col in ["model_used", "ai_model"]:
+        if col in df.columns:
+            return col
+    return None
+
+
+def get_model_short(model_full):
+    """Extract short model name: 'openai/gpt-5.4' -> 'gpt-5.4'."""
+    if not model_full or pd.isna(model_full):
+        return "unknown"
+    s = str(model_full)
+    return s.split("/")[-1] if "/" in s else s
+
+
+def get_field_name(csv_path):
+    """Derive field/domain name from CSV path stem."""
+    stem = Path(csv_path).stem.lower()
+    for field in ["essay", "abstract", "news", "report"]:
+        if field in stem:
+            return field + "s" if not stem.endswith("s") else field
+    return Path(csv_path).stem
 
 
 def get_detector_config(method, device):
-    """Load the YAML config for a detector, including threshold."""
+    """Load the YAML config for a detector."""
     config_path = PROJECT_ROOT / "omini_text" / "configs" / f"{method}.yaml"
     if config_path.exists():
         with open(config_path) as f:
@@ -92,66 +121,27 @@ def get_detector_config(method, device):
     return config
 
 
+def get_git_commit():
+    """Get current git commit hash."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(PROJECT_ROOT),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
+
 # ============================================================================
-# Unified confidence / threshold extraction
+# Detection
 # ============================================================================
 
-# Detectors whose `score` is already P(AI) in [0, 1]
-_PROB_DETECTORS = {
-    "fast-detectgpt", "e5-small", "radar", "desklib", "roberta-openai",
-    "ood-llm-detect", "detectllm",
-}
+def evaluate_method(method, df, device):
+    """Run detector on all rows, returning prediction dicts with detection_* fields.
 
-# Detectors whose `score` is a coverage/ratio in [0, 1]
-_RATIO_DETECTORS = {"seqxgpt", "mgtd"}
-
-
-def _extract_confidence(method: str, result: dict) -> float | None:
-    """Return a unified P(AI) confidence in [0, 1].
-
-    For detectors that already output a probability or ratio, pass through.
-    For others (short-phd, binoculars, dna-detectllm), apply a sigmoid or
-    store the raw score and let downstream analysis recalibrate.
+    Each output dict contains the full CSV row + detection_* fields appended.
     """
-    score = result.get("score")
-    if score is None:
-        return None
-
-    if method in _PROB_DETECTORS or method in _RATIO_DETECTORS:
-        return float(score)
-
-    if method == "short-phd":
-        # PHD score: higher = more AI.  Sigmoid centered at threshold.
-        threshold = result.get("metadata", {}).get("threshold", 15.0)
-        return float(1 / (1 + np.exp(-(score - threshold))))
-
-    if method in ("binoculars", "dna-detectllm"):
-        # These are heuristic perplexity-ratio scores (negated so higher = more AI).
-        # No valid probabilistic interpretation — return None and let
-        # downstream analysis use pred_score + threshold directly.
-        return None
-
-    if method == "gigacheck":
-        return float(score)
-
-    # Fallback: return raw score as-is
-    return float(score)
-
-
-def _extract_threshold(method: str, result: dict, config: dict) -> float | None:
-    """Extract the threshold actually used for this prediction."""
-    # Try metadata first (some detectors embed it per-sample)
-    meta = result.get("metadata", {})
-    if "threshold" in meta:
-        return float(meta["threshold"])
-    # Fall back to config
-    if "threshold" in config:
-        return float(config["threshold"])
-    return None
-
-
-def evaluate_method(method, records, device):
-    """Run detector and return predictions with full raw outputs."""
     from omini_text.core import pipeline
 
     config = get_detector_config(method, device)
@@ -160,62 +150,223 @@ def evaluate_method(method, records, device):
     print(f"  Loading {method} (device={device})")
     print(f"{'='*60}")
 
+    t_load_start = time.time()
     pipe = pipeline("ai-text-detection", model=method, device=device)
+    load_seconds = time.time() - t_load_start
 
-    results = []
-    t0 = time.time()
+    predictions = []
+    n_errors = 0
+    t_score_start = time.time()
 
-    for i, rec in enumerate(records):
+    for i, (_, row) in enumerate(df.iterrows()):
         if (i + 1) % 100 == 0 or i == 0:
-            elapsed = time.time() - t0
+            elapsed = time.time() - t_score_start
             rate = (i + 1) / elapsed if elapsed > 0 else 0
-            print(f"  [{method}] {i+1}/{len(records)} ({rate:.1f} docs/s)")
+            print(f"  [{method}] {i+1}/{len(df)} ({rate:.1f} docs/s)")
+
+        # Build output: full CSV row as dict
+        row_dict = {}
+        for col in df.columns:
+            if col == "_doc_label":
+                continue
+            val = row[col]
+            row_dict[col] = _sanitize_value(val)
 
         try:
-            raw_result = pipe(rec["text"])
-            # Save full raw output but drop the text field (recoverable via essay_id)
-            raw_for_save = _sanitize(raw_result)
-            raw_for_save.pop("text", None)
-            results.append({
-                "essay_id": rec["essay_id"],
-                "version": rec["version"],
-                "domain": rec["domain"],
-                "ai_model": rec["ai_model"],
-                "operation": rec["operation"],
-                "ai_ratio_gt": rec["ai_ratio_gt"],
-                "doc_label_gt": rec["doc_label"],
-                "pred_label": raw_result["label"],
-                "pred_score": raw_result.get("score"),
-                "confidence": _extract_confidence(method, raw_result),
-                "threshold": _extract_threshold(method, raw_result, config),
-                "raw_output": raw_for_save,
-            })
+            result = pipe(row["text_clean"])
+            row_dict["detection_detector"] = method
+            row_dict["detection_label"] = result["label"]
+            row_dict["detection_score_p_ai"] = result.get("score")
+            row_dict["detection_metadata"] = _sanitize(result.get("metadata", {}))
+            row_dict["detection_gt_label"] = int(row["_doc_label"])
+            row_dict["detection_gt_source"] = "any_ai_token=1"
+            row_dict["detection_error"] = None
         except Exception as e:
-            results.append({
-                "essay_id": rec["essay_id"],
-                "version": rec["version"],
-                "domain": rec["domain"],
-                "ai_model": rec["ai_model"],
-                "operation": rec["operation"],
-                "ai_ratio_gt": rec["ai_ratio_gt"],
-                "doc_label_gt": rec["doc_label"],
-                "pred_label": 0,
-                "pred_score": 0.0,
-                "confidence": None,
-                "threshold": None,
-                "raw_output": None,
-                "error": str(e),
-            })
+            row_dict["detection_detector"] = method
+            row_dict["detection_label"] = 0
+            row_dict["detection_score_p_ai"] = 0.0
+            row_dict["detection_metadata"] = {}
+            row_dict["detection_gt_label"] = int(row["_doc_label"])
+            row_dict["detection_gt_source"] = "any_ai_token=1"
+            row_dict["detection_error"] = str(e)
+            n_errors += 1
 
-    elapsed = time.time() - t0
-    n_errors = sum(1 for r in results if "error" in r)
-    print(f"  [{method}] Done: {len(records)} docs in {elapsed:.1f}s, {n_errors} errors")
+        predictions.append(row_dict)
+
+    score_seconds = time.time() - t_score_start
+    print(f"  [{method}] Done: {len(df)} docs in {score_seconds:.1f}s, {n_errors} errors")
 
     pipe.cleanup()
     gc.collect()
 
-    return results, config
+    runtime = {
+        "load_seconds": round(load_seconds, 2),
+        "score_seconds": round(score_seconds, 2),
+        "docs_per_second": round(len(df) / score_seconds, 2) if score_seconds > 0 else 0,
+    }
 
+    return predictions, config, runtime, n_errors
+
+
+# ============================================================================
+# Metrics
+# ============================================================================
+
+def _compute_group_metrics(y_true, y_pred, y_score):
+    """Compute the full metrics dict for a group of predictions."""
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    n = len(y_true)
+    if n == 0:
+        return {"n": 0}
+
+    n_pos = int(y_true.sum())
+    n_neg = n - n_pos
+
+    metrics = {
+        "n": n,
+        "n_pos_ai": n_pos,
+        "n_neg_human": n_neg,
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+    }
+
+    # Per-class precision/recall/F1
+    metrics["precision_human"] = float(precision_score(y_true, y_pred, pos_label=0, zero_division=0))
+    metrics["recall_human"] = float(recall_score(y_true, y_pred, pos_label=0, zero_division=0))
+    metrics["f1_human"] = float(f1_score(y_true, y_pred, pos_label=0, zero_division=0))
+    metrics["precision_ai"] = float(precision_score(y_true, y_pred, pos_label=1, zero_division=0))
+    metrics["recall_ai"] = float(recall_score(y_true, y_pred, pos_label=1, zero_division=0))
+    metrics["f1_ai"] = float(f1_score(y_true, y_pred, pos_label=1, zero_division=0))
+
+    # Confusion matrix
+    if len(set(y_true)) == 2:
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+    elif n_pos == 0:
+        tn = int((y_pred == 0).sum())
+        fp = int((y_pred == 1).sum())
+        fn, tp = 0, 0
+    else:
+        fn = int((y_pred == 0).sum())
+        tp = int((y_pred == 1).sum())
+        tn, fp = 0, 0
+    metrics["confusion"] = {"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)}
+
+    # FPR, FNR
+    metrics["fpr"] = float(fp / (fp + tn)) if (fp + tn) > 0 else None
+    metrics["fnr"] = float(fn / (fn + tp)) if (fn + tp) > 0 else None
+
+    # AUROC, AUPR
+    y_score_clean = [s for s in y_score if s is not None]
+    if len(set(y_true)) > 1 and len(y_score_clean) == n:
+        y_score_arr = np.array(y_score_clean)
+        metrics["auroc"] = float(roc_auc_score(y_true, y_score_arr))
+        metrics["aupr_ai"] = float(average_precision_score(y_true, y_score_arr))
+    else:
+        metrics["auroc"] = None
+        metrics["aupr_ai"] = None
+
+    return metrics
+
+
+def compute_all_metrics(predictions):
+    """Compute overall + sliced metrics from prediction dicts."""
+    valid = [p for p in predictions if p.get("detection_error") is None]
+
+    y_true = [p["detection_gt_label"] for p in valid]
+    y_pred = [p["detection_label"] for p in valid]
+    y_score = [p["detection_score_p_ai"] for p in valid]
+
+    metrics_overall = _compute_group_metrics(y_true, y_pred, y_score)
+
+    # By version
+    metrics_by_version = {}
+    by_ver = defaultdict(lambda: ([], [], []))
+    for p in valid:
+        v = p.get("version", "unknown")
+        by_ver[v][0].append(p["detection_gt_label"])
+        by_ver[v][1].append(p["detection_label"])
+        by_ver[v][2].append(p["detection_score_p_ai"])
+    for ver in sorted(by_ver):
+        yt, yp, ys = by_ver[ver]
+        metrics_by_version[ver] = _compute_group_metrics(yt, yp, ys)
+
+    # By operation
+    metrics_by_operation = {}
+    by_op = defaultdict(lambda: ([], [], []))
+    for p in valid:
+        op = p.get("operation", "unknown")
+        if pd.isna(op) or op in ("", "none", "nan"):
+            op = "none"
+        by_op[str(op)][0].append(p["detection_gt_label"])
+        by_op[str(op)][1].append(p["detection_label"])
+        by_op[str(op)][2].append(p["detection_score_p_ai"])
+    for op in sorted(by_op):
+        yt, yp, ys = by_op[op]
+        metrics_by_operation[op] = _compute_group_metrics(yt, yp, ys)
+
+    return metrics_overall, metrics_by_version, metrics_by_operation
+
+
+# ============================================================================
+# Output builders
+# ============================================================================
+
+def build_summary(
+    method, dataset_name, field, model_short, csv_path, split,
+    config, metrics_overall, metrics_by_version, metrics_by_operation,
+    runtime, n_errors, git_commit, device,
+):
+    """Build the summary.json structure matching teammate's format."""
+    return {
+        "detector": method,
+        "dataset": {
+            "name": dataset_name,
+            "field": field,
+            "model_short": model_short,
+            "csv_path": str(csv_path),
+            "split": split,
+            "n_samples": metrics_overall.get("n", 0),
+            "n_ai_positive": metrics_overall.get("n_pos_ai", 0),
+            "n_human_negative": metrics_overall.get("n_neg_human", 0),
+        },
+        "protocol": {
+            "pipeline_call": f"pipeline('ai-text-detection', model='{method}', device='{device}')",
+            "extra_kwargs": None,
+            "yaml_config_snapshot": config,
+            "gt_label_rule": "1 iff AI_token_ratio > 0 (any AI content present)",
+            "input_field": "text_clean",
+        },
+        "metrics_overall": metrics_overall,
+        "metrics_by_version": metrics_by_version,
+        "metrics_by_operation": metrics_by_operation,
+        "runtime": runtime,
+        "errors": {"n_detection_errors": n_errors},
+        "git_commit": git_commit,
+    }
+
+
+def build_run_config(
+    method, field, model_short, split, device, max_samples,
+    csv_path, timestamp, git_commit, yaml_config,
+):
+    """Build the run_config.json structure matching teammate's format."""
+    return {
+        "detector": method,
+        "field": field,
+        "model_short": model_short,
+        "split": split,
+        "device": device,
+        "max_samples": max_samples,
+        "csv_path": str(csv_path),
+        "timestamp": timestamp,
+        "git_commit": git_commit,
+        "yaml_config": yaml_config,
+    }
+
+
+# ============================================================================
+# Serialization helpers
+# ============================================================================
 
 def _sanitize(obj):
     """Make a detector result JSON-serializable."""
@@ -239,65 +390,22 @@ def _sanitize(obj):
     return obj
 
 
-def compute_metrics(results):
-    """Compute overall and per-version metrics."""
-    valid = [r for r in results if "error" not in r]
-    if not valid:
-        return {}, {}
+def _sanitize_value(val):
+    """Sanitize a single pandas cell value for JSON."""
+    if isinstance(val, float) and (np.isnan(val) or np.isinf(val)):
+        return None
+    if isinstance(val, (np.integer,)):
+        return int(val)
+    if isinstance(val, (np.floating,)):
+        return float(val)
+    if isinstance(val, (np.bool_,)):
+        return bool(val)
+    return val
 
-    y_true = [r["doc_label_gt"] for r in valid]
-    y_pred = [r["pred_label"] for r in valid]
-    y_score = [r["pred_score"] for r in valid]
 
-    overall = {
-        "accuracy": accuracy_score(y_true, y_pred),
-        "f1_macro": f1_score(y_true, y_pred, average="macro", zero_division=0),
-        "ai_precision": precision_score(y_true, y_pred, pos_label=1, zero_division=0),
-        "ai_recall": recall_score(y_true, y_pred, pos_label=1, zero_division=0),
-        "ai_f1": f1_score(y_true, y_pred, pos_label=1, zero_division=0),
-        "n": len(valid),
-        "n_errors": len(results) - len(valid),
-    }
-
-    if len(set(y_true)) > 1 and all(s is not None for s in y_score):
-        overall["auroc"] = roc_auc_score(y_true, y_score)
-
-    gt_ratios = [r["ai_ratio_gt"] for r in valid]
-    scores_clean = [s for s in y_score if s is not None]
-    if len(scores_clean) == len(gt_ratios) and np.std(gt_ratios) > 0 and np.std(scores_clean) > 0:
-        overall["score_ratio_corr"] = float(np.corrcoef(gt_ratios, scores_clean)[0, 1])
-
-    # Per-version
-    by_version = defaultdict(list)
-    for r in valid:
-        by_version[r["version"]].append(r)
-
-    version_metrics = {}
-    for ver in sorted(by_version.keys()):
-        vr = by_version[ver]
-        yt = [r["doc_label_gt"] for r in vr]
-        yp = [r["pred_label"] for r in vr]
-        ys = [r["pred_score"] for r in vr]
-
-        vm = {
-            "accuracy": accuracy_score(yt, yp),
-            "mean_score": float(np.mean([s for s in ys if s is not None])) if any(s is not None for s in ys) else None,
-            "n": len(vr),
-        }
-
-        if sum(yt) > 0:
-            vm["ai_precision"] = precision_score(yt, yp, pos_label=1, zero_division=0)
-            vm["ai_recall"] = recall_score(yt, yp, pos_label=1, zero_division=0)
-            vm["ai_f1"] = f1_score(yt, yp, pos_label=1, zero_division=0)
-
-        if sum(1 - np.array(yt)) > 0:
-            vm["human_precision"] = precision_score(yt, yp, pos_label=0, zero_division=0)
-            vm["human_recall"] = recall_score(yt, yp, pos_label=0, zero_division=0)
-
-        version_metrics[ver] = vm
-
-    return overall, version_metrics
-
+# ============================================================================
+# Main
+# ============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
@@ -305,101 +413,124 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--methods", nargs="+", required=True,
-                        help="Detector names (e.g. short-phd fast-detectgpt)")
+                        help="Detector names (e.g. fast-detectgpt e5-small)")
     parser.add_argument("--csv", nargs="+", required=True,
-                        help="One or more CSV files (v2 prepared format)")
+                        help="One or more CSV files")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--split", default="test",
                         choices=["train", "dev", "test", "all"])
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--max-samples", type=int, default=None)
+    parser.add_argument("--dataset-name", default="new4d",
+                        help="Short dataset name for folder naming")
     args = parser.parse_args()
 
     split = None if args.split == "all" else args.split
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_dir = Path(args.output_dir) / timestamp
-    output_dir.mkdir(parents=True, exist_ok=True)
+    git_commit = get_git_commit()
+    output_base = Path(args.output_dir)
 
-    print(f"Output: {output_dir}")
     print(f"Methods: {args.methods}")
     print(f"CSVs: {args.csv}")
     print(f"Split: {args.split}")
+    print(f"Output: {output_base}")
     print()
-
-    all_summaries = {}
 
     for method in args.methods:
         for csv_path_str in args.csv:
             csv_path = Path(csv_path_str)
-            ds_name = csv_path.stem  # e.g. "essay", "abstract"
+            field = get_field_name(csv_path)
 
             print(f"\n{'#'*60}")
-            print(f"  {method.upper()} on {ds_name.upper()} (split={args.split})")
+            print(f"  Loading {csv_path.name}")
             print(f"{'#'*60}")
 
-            records = load_data(csv_path, split=split,
-                                max_samples=args.max_samples)
-            print(f"  Loaded {len(records)} records")
+            df = load_data(csv_path, split=split, max_samples=args.max_samples)
+            print(f"  Loaded {len(df)} records")
 
-            if not records:
+            if df.empty:
                 continue
 
-            results, config = evaluate_method(method, records, args.device)
-            overall, by_version = compute_metrics(results)
+            # Split by AI model if multiple present
+            model_col = get_model_column(df)
+            if model_col:
+                model_groups = df.groupby(model_col)
+            else:
+                df["_model_tmp"] = "unknown"
+                model_groups = df.groupby("_model_tmp")
 
-            # Print summary
-            print(f"\n  --- {method}/{ds_name} Overall ---")
-            for k, v in overall.items():
-                print(f"    {k}: {v:.4f}" if isinstance(v, float) else f"    {k}: {v}")
+            for model_full, model_df in model_groups:
+                model_short = get_model_short(model_full)
+                model_df = model_df.reset_index(drop=True)
 
-            print(f"\n  --- By Version ---")
-            for ver, vm in by_version.items():
-                ai_f1 = vm.get("ai_f1", "-")
-                if isinstance(ai_f1, float):
-                    ai_f1 = f"{ai_f1:.3f}"
-                mean_s = f"{vm['mean_score']:.3f}" if vm.get("mean_score") is not None else "-"
-                print(f"    {ver}: acc={vm['accuracy']:.3f} score={mean_s} "
-                      f"ai_f1={ai_f1} n={vm['n']}")
+                print(f"\n  --- {method} / {field} / {model_short} ({len(model_df)} samples) ---")
 
-            # Save predictions with raw outputs
-            pred_dir = output_dir / ds_name
-            pred_dir.mkdir(parents=True, exist_ok=True)
-            pred_path = pred_dir / f"{method}_predictions.jsonl"
-            with open(pred_path, "w") as f:
-                for r in results:
-                    f.write(json.dumps(r, default=str) + "\n")
+                # Run detection
+                predictions, config, runtime, n_errors = evaluate_method(
+                    method, model_df, args.device,
+                )
 
-            # Save run config (threshold, settings, etc.)
-            run_meta = {
-                "method": method,
-                "dataset": ds_name,
-                "csv_path": str(csv_path),
-                "split": args.split,
-                "device": args.device,
-                "timestamp": timestamp,
-                "n_records": len(records),
-                "config": config,
-                "overall_metrics": overall,
-                "per_version_metrics": by_version,
-            }
-            meta_path = pred_dir / f"{method}_run_meta.json"
-            with open(meta_path, "w") as f:
-                json.dump(run_meta, f, indent=2, default=str)
+                # Compute metrics
+                metrics_overall, metrics_by_version, metrics_by_operation = (
+                    compute_all_metrics(predictions)
+                )
 
-            print(f"\n  Saved: {pred_path}")
-            print(f"  Saved: {meta_path}")
+                # Print summary
+                acc = metrics_overall.get("accuracy", 0)
+                auroc = metrics_overall.get("auroc", "N/A")
+                f1_ai = metrics_overall.get("f1_ai", 0)
+                print(f"  Accuracy: {acc:.4f}  AUROC: {auroc}  AI-F1: {f1_ai:.4f}")
 
-            key = f"{method}_{ds_name}"
-            all_summaries[key] = {
-                "overall": overall,
-                "by_version": by_version,
-            }
+                # Build output folder
+                run_name = f"{method}_{args.dataset_name}_{field}_{model_short}_{timestamp}"
+                run_dir = output_base / run_name
+                run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save global summary
-    summary_path = output_dir / "summary.json"
-    with open(summary_path, "w") as f:
-        json.dump(all_summaries, f, indent=2, default=str)
-    print(f"\nAll results: {output_dir}")
+                # Write predictions.jsonl
+                pred_path = run_dir / "predictions.jsonl"
+                with open(pred_path, "w") as f:
+                    for p in predictions:
+                        f.write(json.dumps(p, default=str) + "\n")
+
+                # Write summary.json
+                summary = build_summary(
+                    method=method,
+                    dataset_name=args.dataset_name,
+                    field=field,
+                    model_short=model_short,
+                    csv_path=csv_path,
+                    split=args.split,
+                    config=config,
+                    metrics_overall=metrics_overall,
+                    metrics_by_version=metrics_by_version,
+                    metrics_by_operation=metrics_by_operation,
+                    runtime=runtime,
+                    n_errors=n_errors,
+                    git_commit=git_commit,
+                    device=args.device,
+                )
+                with open(run_dir / "summary.json", "w") as f:
+                    json.dump(summary, f, indent=2, default=str)
+
+                # Write run_config.json
+                run_config = build_run_config(
+                    method=method,
+                    field=field,
+                    model_short=model_short,
+                    split=args.split,
+                    device=args.device,
+                    max_samples=args.max_samples,
+                    csv_path=csv_path,
+                    timestamp=timestamp,
+                    git_commit=git_commit,
+                    yaml_config=config,
+                )
+                with open(run_dir / "run_config.json", "w") as f:
+                    json.dump(run_config, f, indent=2, default=str)
+
+                print(f"  Output: {run_dir}/")
+
+    print(f"\nAll results under: {output_base}")
 
 
 if __name__ == "__main__":
