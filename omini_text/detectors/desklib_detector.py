@@ -185,21 +185,24 @@ class DesklibDetector(BaseDetector):
 
         with torch.no_grad():
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs["logits"]
-            probabilities = torch.sigmoid(logits).squeeze(-1).cpu().numpy()
+            logits = outputs["logits"]  # (batch, 1)
+            probabilities = torch.sigmoid(logits).squeeze(-1)
 
         results = []
-        for text, prob in zip(texts, probabilities):
-            prob = float(prob)
+        for i, text in enumerate(texts):
+            logit_val = logits[i].item()
+            prob = probabilities[i].item()
             label = 1 if prob >= self.threshold else 0
-            results.append(
-                {
-                    "text": text,
-                    "label": label,
-                    "score": prob,
-                    "metadata": {"num_tokens": len(text.split())},
-                }
-            )
+            results.append({
+                "text": text,
+                "label": label,
+                "score": float(prob),
+                "metadata": {
+                    "logits": [float(-logit_val), float(logit_val)],  # [human, AI]
+                    "threshold": self.threshold,
+                    "num_tokens": len(text.split()),
+                },
+            })
 
         return results
 

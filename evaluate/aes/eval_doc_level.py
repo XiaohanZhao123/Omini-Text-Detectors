@@ -56,7 +56,10 @@ def load_data(csv_path, split=None, max_samples=None):
 
     records = []
     for _, row in df.iterrows():
-        tok_labels = ast.literal_eval(row["tok_labels"])
+        try:
+            tok_labels = ast.literal_eval(str(row["tok_labels"]))
+        except (ValueError, SyntaxError):
+            tok_labels = []
         ai_ratio = sum(tok_labels) / len(tok_labels) if tok_labels else 0
         doc_label = 1 if ai_ratio > 0 else 0
 
@@ -122,14 +125,11 @@ def _extract_confidence(method: str, result: dict) -> float | None:
         threshold = result.get("metadata", {}).get("threshold", 15.0)
         return float(1 / (1 + np.exp(-(score - threshold))))
 
-    if method == "binoculars":
-        # binoculars_detector already negates the score so higher = more AI.
-        # Apply sigmoid centered at 0 for a rough probability.
-        return float(1 / (1 + np.exp(-score)))
-
-    if method == "dna-detectllm":
-        # Same negation convention as binoculars.
-        return float(1 / (1 + np.exp(-score)))
+    if method in ("binoculars", "dna-detectllm"):
+        # These are heuristic perplexity-ratio scores (negated so higher = more AI).
+        # No valid probabilistic interpretation — return None and let
+        # downstream analysis use pred_score + threshold directly.
+        return None
 
     if method == "gigacheck":
         return float(score)
@@ -219,19 +219,23 @@ def evaluate_method(method, records, device):
 
 def _sanitize(obj):
     """Make a detector result JSON-serializable."""
+    import torch
+
     if isinstance(obj, dict):
         return {k: _sanitize(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_sanitize(v) for v in obj]
-    if isinstance(obj, (np.integer,)):
+    if isinstance(obj, torch.Tensor):
+        return _sanitize(obj.cpu().tolist())
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.integer, np.bool_)):
         return int(obj)
     if isinstance(obj, (np.floating, float)):
         v = float(obj)
         if np.isnan(v) or np.isinf(v):
             return None
         return v
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
     return obj
 
 

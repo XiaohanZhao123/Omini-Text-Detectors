@@ -127,7 +127,6 @@ class RADARDetector(BaseDetector):
 
     def _detect_batch(self, texts: List[str]) -> List[Dict]:
         """Detect batch of texts."""
-        # Tokenize batch
         inputs = self.tokenizer(
             texts,
             padding=True,
@@ -137,27 +136,27 @@ class RADARDetector(BaseDetector):
         )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-        # Run inference
         with torch.no_grad():
             outputs = self.model(**inputs)
-            logits = outputs.logits
+            logits = outputs.logits  # (batch, 2) — [AI, human]
             probs = F.softmax(logits, dim=-1)
-            # RADAR uses [AI=0, human=1] label convention
-            ai_probs = probs[:, 0].cpu().numpy()
 
-        # Build results
         results = []
-        for text, ai_prob in zip(texts, ai_probs):
-            ai_prob = float(ai_prob)
+        for i, text in enumerate(texts):
+            ai_prob = probs[i, 0].item()
+            # Reorder to [human, AI]
+            logits_list = [logits[i, 1].item(), logits[i, 0].item()]
             label = 1 if ai_prob >= self.threshold else 0
-            results.append(
-                {
-                    "text": text,
-                    "label": label,
-                    "score": ai_prob,
-                    "metadata": {"model": self.model_path, "threshold": self.threshold},
-                }
-            )
+            results.append({
+                "text": text,
+                "label": label,
+                "score": float(ai_prob),
+                "metadata": {
+                    "logits": logits_list,
+                    "model": self.model_path,
+                    "threshold": self.threshold,
+                },
+            })
 
         return results
 

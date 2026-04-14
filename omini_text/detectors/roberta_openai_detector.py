@@ -117,18 +117,25 @@ class RoBERTaOpenAIDetector(BaseDetector):
 
         with torch.no_grad():
             outputs = self.model(**inputs)
-            probs = F.softmax(outputs.logits, dim=-1)
-            ai_probs = probs[:, self._ai_index].cpu().numpy()
+            raw_logits = outputs.logits  # (batch, 2)
+            probs = F.softmax(raw_logits, dim=-1)
 
+        human_index = 1 - self._ai_index
         results = []
-        for text, ai_prob in zip(texts, ai_probs):
-            ai_prob = float(ai_prob)
+        for i, text in enumerate(texts):
+            ai_prob = probs[i, self._ai_index].item()
+            logits_list = [raw_logits[i, human_index].item(),
+                           raw_logits[i, self._ai_index].item()]
             label = 1 if ai_prob >= self.threshold else 0
             results.append({
                 "text": text,
                 "label": label,
-                "score": ai_prob,
-                "metadata": {"model": self.model_path, "threshold": self.threshold},
+                "score": float(ai_prob),
+                "metadata": {
+                    "logits": logits_list,
+                    "model": self.model_path,
+                    "threshold": self.threshold,
+                },
             })
 
         return results

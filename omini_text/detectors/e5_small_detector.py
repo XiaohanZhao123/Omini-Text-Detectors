@@ -117,30 +117,8 @@ class E5SmallDetector(BaseDetector):
         }
 
     def _detect_batch(self, texts: List[str]) -> List[Dict]:
-        """Detect batch of texts."""
-        # Pipeline handles batching internally
-        results = self.pipe(texts, truncation=True, max_length=512)
-
-        outputs = []
-        for text, result in zip(texts, results):
-            # Extract probability for AI-generated class (LABEL_1)
-            if result["label"] == "LABEL_1":
-                prob = result["score"]
-            else:  # LABEL_0 (human-written)
-                prob = 1.0 - result["score"]
-
-            label = 1 if prob >= self.threshold else 0
-
-            outputs.append(
-                {
-                    "text": text,
-                    "label": label,
-                    "score": float(prob),
-                    "metadata": {"num_tokens": len(text.split())},
-                }
-            )
-
-        return outputs
+        """Detect batch of texts via direct model forward (same as single)."""
+        return [self._detect_single(t) for t in texts]
 
     def cleanup(self):
         """Release GPU memory by deleting model and clearing CUDA cache."""
