@@ -645,6 +645,12 @@ def train(args):
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- AMP ---
+    use_amp = args.amp and 'cuda' in str(device)
+    scaler = torch.amp.GradScaler('cuda', enabled=use_amp)
+    if use_amp:
+        print(f"  AMP: enabled (float16 forward, float32 optimizer)")
+
     # --- Training loop ---
     best_dev_f1 = 0
     print(f"\nTraining for {args.epochs} epochs ({total_steps} steps, {warmup_steps} warmup)...")
@@ -657,13 +663,17 @@ def train(args):
 
         for batch_idx, batch in enumerate(train_loader):
             batch = {k: v.to(device) for k, v in batch.items()}
-            outputs = model(batch['input_ids'], batch['attention_mask'], batch['labels'])
-            loss = outputs['loss']
+
+            with torch.amp.autocast('cuda', enabled=use_amp):
+                outputs = model(batch['input_ids'], batch['attention_mask'], batch['labels'])
+                loss = outputs['loss']
 
             optimizer.zero_grad()
-            loss.backward()
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             scheduler.step()
 
             total_loss += loss.item()
@@ -745,7 +755,7 @@ ARCH_DEFAULTS = {
     'gl-clic': {
         # GL-CLiC train.py (IJCNLP-AACL 2025)
         # Paper used batch_size=2 for full documents with auxiliary features.
-        # For sentence-only classification, batch_size=32 is more appropriate.
+        # For sentence-only classification with AMP, batch_size=32 fits on 24GB.
         'epochs': 10,
         'batch_size': 32,
         'lr': 1e-4,
@@ -782,6 +792,12 @@ def main():
     p.add_argument("--seed", type=int, default=0, help="Random seed for data split")
     p.add_argument("--output-dir", default=None,
                    help="Output dir (default: checkpoints/<arch>)")
+
+    # AMP
+    p.add_argument("--amp", action="store_true", default=True,
+                   help="Enable mixed precision training (default: on)")
+    p.add_argument("--no-amp", dest="amp", action="store_false",
+                   help="Disable mixed precision training")
 
     # Wandb
     p.add_argument("--wandb-project", default="omini-text-detector",
