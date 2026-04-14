@@ -243,7 +243,7 @@ class BiGRUCRFTokenClassifier(nn.Module):
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        hidden = self.dropout(outputs.last_hidden_state)
+        hidden = self.dropout(outputs.last_hidden_state.float())
 
         gru_out, _ = self.gru(hidden)
         gru_out = self.layer_norm(gru_out)
@@ -379,7 +379,7 @@ class SentenceClassifier(nn.Module):
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        cls_rep = outputs.last_hidden_state[:, 0, :]  # [CLS]
+        cls_rep = outputs.last_hidden_state[:, 0, :].float()  # [CLS]
         cls_rep = self.feature_norm(cls_rep)
         cls_rep = self.dropout(cls_rep)
         logits = self.classifier(cls_rep).squeeze(-1)  # (B,)
