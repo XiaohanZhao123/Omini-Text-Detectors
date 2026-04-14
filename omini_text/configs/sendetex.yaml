@@ -1,0 +1,21 @@
+# SenDetEX: Sentence-Level AI-Generated Text Detection (EMNLP 2025)
+# Style and context fusion for sentence-level detection in human-AI hybrid content
+# Paper: https://aclanthology.org/2025.emnlp-main.268/
+# GitHub: https://github.com/TristoneJiang/SenDetEX
+
+model: sendetex
+
+# Model Configuration
+proxy_model: bert-base-uncased      # Proxy LM for embeddings and token logits
+checkpoint_path: null               # Path to trained SenDetEX checkpoint (.pt)
+d_model: 768                        # Embedding dimension
+
+# Regeneration model (used to generate alternative versions for style comparison)
+regen_model: gpt2                   # Causal LM for sentence regeneration
+regen_max_length: 128               # Max tokens for regeneration
+
+# Device
+device: auto
+
+# Inference
+max_length: 512

@@ -53,6 +53,9 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
         "detectllm": "omini_text.detectors.detectllm_detector.DetectLLMDetector",
         "roberta-openai": "omini_text.detectors.roberta_openai_detector.RoBERTaOpenAIDetector",
         "miec": "omini_text.detectors.miec_detector.MIECDetector",
+        "gl-clic": "omini_text.detectors.gl_clic_detector.GLCLiCDetector",
+        "sendetex": "omini_text.detectors.sendetex_detector.SenDetEXDetector",
+        "adaloc": "omini_text.detectors.adaloc_detector.AdaLocDetector",
     }
 
     if model not in model_map:
