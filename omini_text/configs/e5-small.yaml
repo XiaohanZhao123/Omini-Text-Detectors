@@ -11,7 +11,10 @@ model_path: MayZhou/e5-small-lora-ai-generated-detector # HuggingFace path or lo
 device: auto # Options: auto (recommended), cuda, cpu
 
 # Detection Configuration
-threshold: 0.85 # Classification threshold (original training used 0.85 for optimal accuracy)
+threshold: 0.5 # HF card does not specify a threshold; 0.5 is the sigmoid default.
+               # Empirically matches the HF card's 93.9% RAID accuracy at 0.5 (we hit 96.63);
+               # the earlier 0.85 hardcoded default missed by ~10 pts. See
+               # evaluate/reproductions/REPRODUCTION_RESULTS.md and WRAPPER_FIXES_TODO.md (2026-04-14).
 
 # Performance Notes:
 # - Inference: ~10ms per text (GPU), ~50ms (CPU)
