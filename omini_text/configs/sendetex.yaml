@@ -2,6 +2,11 @@
 # Style and context fusion for sentence-level detection in human-AI hybrid content
 # Paper: https://aclanthology.org/2025.emnlp-main.268/
 # GitHub: https://github.com/TristoneJiang/SenDetEX
+#
+# NOTE: No pretrained checkpoints or training code is available from the authors.
+# The official repo provides only the model architecture (SenDetEX.py) and a data
+# generation script (AutoFill_Refine.py) that requires paid GPT-4o API access.
+# A checkpoint_path must be provided for meaningful inference.
 
 model: sendetex
 

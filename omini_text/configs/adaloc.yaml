@@ -7,7 +7,7 @@ model: adaloc
 
 # Model Configuration
 roberta_model: roberta-large-openai-detector  # Base RoBERTa detector for feature extraction
-checkpoint_path: null                          # Path to trained AdaLoc sentence head (.pkl)
+checkpoint_path: baseline/mgt-localization/logs/adaloc_goodnews/epoch-best.pkl  # dropped 2026-04-14
 hidden_size: 1024                              # RoBERTa-large hidden size
 num_labels: 3                                  # Sliding window output size (= window_size)
 dropout: 0.1
