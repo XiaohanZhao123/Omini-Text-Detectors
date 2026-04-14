@@ -3,7 +3,9 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A unified interface for 9 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+A unified interface for **23 published AI-text detection methods** spanning zero-shot, supervised, boundary, token-level, and LLM-judge approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+
+Not every integrated detector is usable out-of-the-box — some require a user-downloaded checkpoint, an API key, or have gated HF repos. The table under [Available Detectors](#available-detectors) flags these explicitly.
 
 ## Quick Start
 
@@ -52,19 +54,54 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 
 ## Available Detectors
 
-| Detector | Type | Venue | Key Feature | Hardware | Pretrained |
-|----------|------|-------|-------------|----------|------------|
-| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU | ✅ |
-| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU | ✅ |
-| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU | ✅ |
-| [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) | ✅ |
-| [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) | ✅ |
-| [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API | ✅ |
-| [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection (official) | GPU (~14GB) | ✅ |
-| [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES (reproduction) | GPU (~28GB) | ✅* |
-| [RoFT](#roft-boundary) | Boundary | arXiv 2023 | Training-free NLL boundary | GPU (~1-2GB) | ✅ |
+Status legend: ✅ works out-of-the-box · 🔑 needs API key · 📥 needs user-supplied checkpoint or Google-Drive data · 🚪 gated HF repo (request access) · 🧪 code present but not currently usable (see notes).
 
-*SeqXGPT requires training but we provide pretrained checkpoint at `zcahjl3/seqxgpt-detector`
+### Document-level — supervised
+
+| Detector | pipeline name | Venue | Hardware | Status |
+|----------|---------------|-------|----------|--------|
+| [e5-small](#e5-small-lora) | `e5-small` | MS Hackathon '24 | CPU/GPU | ✅ |
+| [Desklib](#desklib) | `desklib` | HF model card | CPU/GPU | ✅ |
+| [RADAR](#radar) | `radar` | NeurIPS 2023 | CPU/GPU | ✅ |
+| RoBERTa-OpenAI | `roberta-openai` | OpenAI 2019 | CPU/GPU | ✅ |
+| MGTD | `mgtd` | SemEval-2024 Task 8 (shared-task submission) | GPU | 🚪 HF repo `1-800-SHARED-TASKS/MGTD-Checkpoints` is gated |
+| OOD-LLM-Detect | `ood-llm-detect` | NeurIPS 2025 | GPU | 🧪 `baseline/ood-llm-detect/` is an orphan submodule (indexed but missing from `.gitmodules`) — fresh clones get an empty dir. Either add a `.gitmodules` entry or vendor the repo before use |
+
+### Document-level — zero-shot
+
+| Detector | pipeline name | Venue | Hardware | Status |
+|----------|---------------|-------|----------|--------|
+| [Fast-DetectGPT](#fast-detectgpt) | `fast-detectgpt` | ICLR 2024 | GPU ~14–18 GB (default Falcon-7B pair) | ✅ |
+| [Binoculars](#binoculars) | `binoculars` | ICML 2024 | GPU ~14 GB | ✅ |
+| DetectLLM | `detectllm` | EMNLP 2023 Findings | GPU ~6 GB (gpt2-xl) | ✅ |
+| DNA-DetectLLM | `dna-detectllm` | arxiv 2024 | GPU ~14 GB | 🧪 orphan submodule (indexed but missing from `.gitmodules`); `baseline/dna-detect-llm/` is empty on fresh clone — vendor the upstream repo before use |
+| Short-PHD | `short-phd` | arxiv 2024 | GPU ~16 GB (Llama-3-8B) | 🚪 default LM is gated `meta-llama/Meta-Llama-3-8B-Instruct` — request HF access first, or override `base_lm_name` in `omini_text/configs/short-phd.yaml` |
+| [Glimpse](#glimpse) | `glimpse` | ICLR 2025 | CPU + API | 🔑 OpenAI API |
+
+### Boundary / span / token-level
+
+| Detector | pipeline name | Venue | Hardware | Status |
+|----------|---------------|-------|----------|--------|
+| [GigaCheck](#gigacheck) | `gigacheck` | arXiv 2410.23728 | GPU ~14 GB | ✅ (declared submodule — fresh clones need `git submodule update --init baseline/gigacheck`) |
+| [SeqXGPT](#seqxgpt) | `seqxgpt` | EMNLP 2023 | GPU ~43 GB total (4 LMs) or ~28 GB with 8-bit | ✅ |
+| RoFT | `roft-boundary` | arxiv 2311.08349 | GPU ~1–2 GB | 🧪 wrapper exposes `gradient_smooth`/`two_means`/`cusum` heuristics that are **not** in the paper or the official repo `github.com/silversolver/ai_boundary_detection`; paper's trained-classifier path is not implemented — results are not paper-faithful |
+| DAMASHA | `damasha` | AAAI 2026 sub. | GPU ~7 GB | ✅ |
+| GenAI-Sentence | `genai-sentence` | arxiv 2509.17830 | GPU ~2 GB | 📥 no shipped checkpoint — train via notebooks in `baseline/genai-detect-sentence/Sentence_Level/` |
+| GL-CLiC | `gl-clic` | IJCNLP-AACL 2025 | GPU ~2 GB | 📥 no shipped checkpoint — run `baseline/gl-clic/scripts/trainer.py` via `baseline/gl-clic/train.py` entry-point |
+| SenDetEX | `sendetex` | EMNLP 2025 | GPU + API | 🔑📥 needs paid GPT-4o for data-gen and a user-trained checkpoint; no automated path ships |
+| AdaLoc | `adaloc` | ACL Findings 2024 | GPU ~2 GB | 📥 checkpoint + data on Google Drive, not shipped |
+
+### LLM-judge (API-based)
+
+| Detector | pipeline name | Provider | Status |
+|----------|---------------|----------|--------|
+| Claude | `claude` | Anthropic | 🔑 `ANTHROPIC_API_KEY` |
+| OpenAI-judge | `openai-judge` | OpenAI | 🔑 `OPENAI_API_KEY` |
+| Gemini | `gemini` | Google | 🔑 `GEMINI_API_KEY` |
+
+Detailed usage sections below exist for the 8 flagship detectors whose names are still linked in the tables (`e5-small`, `Desklib`, `RADAR`, `Fast-DetectGPT`, `Binoculars`, `Glimpse`, `GigaCheck`, `SeqXGPT`). Detectors without a linked name use the same `pipeline("ai-text-detection", model=<name>)` pattern — see `omini_text/configs/<name>.yaml` for their default parameters.
+
+> **⚠ 📥-flagged detectors (genai-sentence, gl-clic, sendetex, adaloc) ship with `checkpoint_path: null`.** Calling `pipeline(..., model="<name>")` without overriding `checkpoint_path=...` will silently load the untrained base backbone and return uninformative predictions. Train or drop a checkpoint first, then pass the path.
 
 ### Supervised Methods (trained on AI text)
 
@@ -158,7 +195,7 @@ for start, end in result["metadata"]["ai_intervals"]:
 
 EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. We provide pretrained checkpoint.
 
-**~28GB VRAM** (4 models, distribute with `feature_devices`)
+**~43 GB VRAM total** (4 models — gpt2-xl 6 GB + gpt-neo-2.7B 11 GB + gpt-j-6B 12 GB + llama-7B 14 GB), or **~28 GB with 8-bit** quantisation. Distribute via `feature_devices`.
 
 ```python
 pipe = pipeline(
@@ -244,7 +281,7 @@ result = detector.detect_with_word_labels("Human intro. AI generated text.")
 | Source Attribution | No (ai/human) | Yes (gpt2, gptneo, gptj, llama, gpt3re, human) | No |
 | Multi-boundary | Yes | Yes | No (single human→AI transition) |
 | Training Required | No (pretrained) | Yes (checkpoint provided) | No (training-free) |
-| VRAM | ~14GB | ~28GB (4 models) | ~1-2GB |
+| VRAM | ~14GB | ~43GB total (4 models) or ~28GB with 8-bit | ~1-2GB |
 | Speed | ~2-5s/text | ~2-5s/text | ~0.5-2s/text |
 
 ## Usage Examples
@@ -294,7 +331,7 @@ python run_profile.py --data_dir /path/to/data --output_dir /path/to/results
 - `results/<timestamp>/profile_log.json` – Run metadata and statistics
 - `results/<timestamp>/accuracy_summary.csv` – Accuracy table
 
-**Available datasets:** `education`, `enron`, `privacy`
+**Available datasets:** primary — `aes_chains`, `aes_chains_sentences`, `sondos_essays`, `sondos_abstracts`. Legacy — `education`, `enron`, `privacy`, `detectrl`, `m4`, `raid`, `raid_train`, `hc3`, `turingbench`. See `evaluate/data_loader.py::DATASETS` for the authoritative list.
 
 **Output record format:**
 ```json
@@ -310,37 +347,54 @@ python run_profile.py --data_dir /path/to/data --output_dir /path/to/results
 
 ```
 Omini-Text/
-├── omini_text/           # Core library
-│   ├── detectors/        # Detector implementations
-│   └── configs/          # Default configs
-├── baseline/             # Original implementations
-│   ├── fast-detect-gpt/
+├── omini_text/              # Core library
+│   ├── core.py              # pipeline() dispatch — model_map registers the 23 published detectors
+│   ├── detectors/           # Detector class per method (23 files)
+│   └── configs/             # Default YAML config per method (23 files)
+├── baseline/                # Original (upstream) implementations
+│   ├── fast-detect-gpt/     #   zero-shot
 │   ├── glimpse/
 │   ├── binoculars/
-│   ├── radar/
+│   ├── dna-detect-llm/      #   ⚠ currently empty — vendor before use
+│   ├── ShortPHD/
+│   ├── radar/               #   supervised doc-level
 │   ├── e5_small/
 │   ├── desklib/
-│   ├── gigacheck/
+│   ├── ood-llm-detect/
+│   ├── mgt-localization/    #   contains AdaLoc
+│   ├── gigacheck/           #   boundary / span
 │   ├── seqxgpt/
-│   └── roft-boundary/
-├── evaluate/             # Evaluation pipeline
-│   ├── run_profile.py    # Main evaluation script
-│   └── data_loader.py    # Dataset loading utilities
-├── examples/             # Usage examples
-├── docs/                 # Documentation
-│   ├── QUICKSTART.md     # 5-minute tutorial
-│   ├── DETECTOR_GUIDE.md # Choosing a detector
-│   ├── CONFIGURATION.md  # Parameter reference
-│   └── API_REFERENCE.md  # Technical specification
-└── cache/                # Model cache
+│   ├── roft-boundary/
+│   ├── damasha/             #   token-level
+│   ├── genai-detect-sentence/
+│   ├── gl-clic/
+│   └── sendetex/
+├── evaluate/                # Evaluation + training harnesses
+│   ├── run_profile.py       # Batch evaluator
+│   ├── run_eval.py          # Single detector × dataset
+│   ├── run_binary_eval.py   # Binary benchmarks (RAID, HC3)
+│   ├── run_sentence_eval.py # Sentence-level accuracy
+│   ├── data_loader.py       # Dataset loading utilities
+│   ├── boundary_metrics.py  # Span IoU, boundary MAE
+│   ├── sentence_eval_utils.py
+│   ├── aes/                 # AES-specific calibration + trajectory analysis
+│   └── train_*.py           # Training harnesses (sentence / token CRF / CRF-sw)
+├── examples/
+├── docs/                    # Quickstart / Configuration / API / Evaluation Interface / Evaluation Data Formats
+├── scripts/                 # Auxiliary shell / setup scripts (git-tracked)
+├── data/                    # Runtime dataset cache (git-ignored)
+├── results/                 # Runtime evaluation outputs (git-ignored)
+├── checkpoints/             # User-trained checkpoints (git-ignored)
+└── cache/                   # Model + dataset cache (git-ignored)
 ```
 
 ## Documentation
 
 - [Quickstart Guide](docs/QUICKSTART.md) – 5-minute tutorial
-- [Detector Guide](docs/DETECTOR_GUIDE.md) – Choosing the right detector
 - [Configuration Reference](docs/CONFIGURATION.md) – All parameters
 - [API Reference](docs/API_REFERENCE.md) – Technical specification
+- [Evaluation Interface](docs/EVALUATION_INTERFACE.md) – Running detectors on datasets
+- [Evaluation Data Formats](docs/EVALUATION_DATA_FORMATS.md) – Dataset schema
 
 ## Citation
 
@@ -368,7 +422,7 @@ Omini-Text/
 
 @inproceedings{binoculars2024,
   title={Spotting LLMs With Binoculars: Zero-Shot Detection of Machine-Generated Text},
-  author={Hans, Abhimanyu and Schwarzschild, Avi and Ramber, Valeriia and Pirber, Tonmoy and Goldblum, Micah and Goldstein, Tom},
+  author={Hans, Abhimanyu and Schwarzschild, Avi and Cherepanova, Valeriia and Kazemi, Hamid and Saha, Aniruddha and Goldblum, Micah and Geiping, Jonas and Goldstein, Tom},
   booktitle={ICML},
   year={2024}
 }
