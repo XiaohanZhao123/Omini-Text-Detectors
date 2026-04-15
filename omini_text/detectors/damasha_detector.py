@@ -213,8 +213,11 @@ class DAMASHADetector(BaseDetector):
 
     def _detect_single(self, text: str) -> Dict:
         """Detect single text."""
-        # Clean text - remove any markup tags
-        text_cleaned = re.sub(r'</?AI_Start>|</?AI_End>|<[^>]+>', '', text)
+        # Strip the dataset's AI span tags only — matches paper's
+        # `baseline/damasha/utils/preprocessing.py::clean_text`. We previously
+        # stripped any `<...>` markup, which over-stripped on prose containing
+        # incidental angle-bracketed tokens.
+        text_cleaned = re.sub(r'</?AI_Start>|</?AI_End>', '', text)
         words = text_cleaned.split()
 
         # Check minimum words
@@ -248,6 +251,13 @@ class DAMASHADetector(BaseDetector):
 
         word_ids = encoding.word_ids(batch_index=0)
 
+        # Track which input words actually got at least one subtoken inside the
+        # 512-subtoken model window. Words past the cutoff are silently
+        # padded as `human=0` by `_map_to_words`; downstream evaluators need
+        # to know which positions are real predictions vs. truncation pad.
+        scored_word_ids = sorted({wid for wid in word_ids if wid is not None})
+        n_scored_words = (max(scored_word_ids) + 1) if scored_word_ids else 0
+
         # Extract style features
         style_features = self.style_extractor.get_style_features(words, word_ids)
         style_features = style_features.unsqueeze(0)  # Add batch dimension
@@ -280,7 +290,7 @@ class DAMASHADetector(BaseDetector):
         ai_count = sum(word_predictions)
         ai_ratio = ai_count / len(word_predictions) if word_predictions else 0
         pred_label = self._get_pred_label(ai_ratio)
-        binary_label = 1 if pred_label in ["ai", "mixed"] else 0
+        binary_label = 1 if pred_label == "ai" else 0
 
         # Get info_mask as list
         info_mask_list = info_mask.squeeze(0).detach().cpu().tolist() if info_mask is not None else []
@@ -311,6 +321,9 @@ class DAMASHADetector(BaseDetector):
                 "word_positions": word_positions,
                 "info_mask": info_mask_list[:len(words)] if info_mask_list else [],
                 "word_logits": word_logits,
+                "n_scored_words": n_scored_words,
+                "n_input_words": len(words),
+                "truncated": n_scored_words < len(words),
             }
         }
 
@@ -372,13 +385,11 @@ class DAMASHADetector(BaseDetector):
         return intervals
 
     def _get_pred_label(self, ai_ratio: float) -> str:
-        """Get prediction label from AI ratio."""
-        if ai_ratio >= 0.9:
-            return "ai"
-        elif ai_ratio > 0.1:
-            return "mixed"
-        else:
-            return "human"
+        """Doc-level label from AI-word ratio. Paper-faithful default: ANY AI
+        token => AI document. The previous 0.9/0.1 split into "ai"/"mixed"/
+        "human" was undocumented in the paper and silently shifted the
+        binary decision boundary."""
+        return "ai" if ai_ratio > 0.0 else "human"
 
     def cleanup(self):
         """Release GPU memory."""
