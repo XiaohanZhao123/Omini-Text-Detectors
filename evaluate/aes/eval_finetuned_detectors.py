@@ -279,7 +279,7 @@ def predict_genai_sentence(model, tokenizer, text, device, max_length=512):
 
 @torch.no_grad()
 def predict_gl_clic(model, tokenizer, text, device, max_length=512):
-    """Run GL-CLiC (sentence-level) inference on a single text."""
+    """Run GL-CLiC (sentence-level) inference with batched sentences."""
     words = text.split()
     dummy_labels = [0] * len(words)
     sentences = split_words_into_sentences(words, dummy_labels)
@@ -287,28 +287,29 @@ def predict_gl_clic(model, tokenizer, text, device, max_length=512):
     if not sentences:
         return {'sent_preds': [], 'sent_probs': [], 'word_preds': [], 'words': words}
 
-    sent_preds = []
-    sent_probs = []
+    # Batch all sentences together
+    sent_texts = [' '.join(sw) for sw, _ in sentences]
+    encoding = tokenizer(
+        sent_texts,
+        max_length=max_length,
+        truncation=True,
+        padding=True,
+        return_tensors="pt",
+    )
+    input_ids = encoding["input_ids"].to(device)
+    attention_mask = encoding["attention_mask"].to(device)
 
-    for sent_words, _ in sentences:
-        sent_text = ' '.join(sent_words)
-        encoding = tokenizer(
-            sent_text,
-            max_length=max_length,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        input_ids = encoding["input_ids"].to(device)
-        attention_mask = encoding["attention_mask"].to(device)
-
+    # Process in chunks to avoid OOM on docs with many sentences
+    batch_size = 64
+    all_probs = []
+    for start in range(0, len(sent_texts), batch_size):
+        end = min(start + batch_size, len(sent_texts))
         with torch.amp.autocast('cuda', enabled='cuda' in str(device)):
-            outputs = model(input_ids, attention_mask)
+            outputs = model(input_ids[start:end], attention_mask[start:end])
+        all_probs.extend(outputs['prob'].cpu().tolist())
 
-        prob = outputs['prob'].item()
-        pred = 1 if prob > 0.5 else 0
-        sent_preds.append(pred)
-        sent_probs.append(prob)
+    sent_preds = [1 if p > 0.5 else 0 for p in all_probs]
+    sent_probs = all_probs
 
     # Map sentence predictions to word predictions
     word_preds = []
@@ -320,7 +321,7 @@ def predict_gl_clic(model, tokenizer, text, device, max_length=512):
         'sent_probs': sent_probs,
         'word_preds': word_preds,
         'words': words,
-        'sentences': [' '.join(sw) for sw, _ in sentences],
+        'sentences': sent_texts,
     }
 
 
