@@ -61,7 +61,10 @@ REQUIRED_COLS = [
     "AI_token_ratio", "text_clean", "tokens", "tok_labels",
 ]
 
-# Columns we always carry through (superset across old/new data)
+# Columns we always carry through (superset across old/new data).
+# Sentence-level columns (`sentences`, `sent_labels`, …) are provided by Sondos in
+# the April 14 v2 `_clean.csv` files and are preserved verbatim so downstream
+# pipelines can use them without re-deriving from token-level labels.
 STANDARD_COLS = [
     "essay_id", "version", "split", "domain", "ai_model",
     "model_used", "operation",
@@ -74,6 +77,9 @@ STANDARD_COLS = [
     "ai_spans_char", "ai_spans_tok",
     "num_ai_spans_tok", "avg_ai_span_len_tok",
     "tokens", "tok_labels", "boundary_pattern",
+    # Sentence-level fields from Sondos's v2 _clean CSVs (April 14, 2026+)
+    "sentences", "sent_labels",
+    "sentences_number", "v0_sentences_number", "sentence_count_match_v0",
 ]
 
 
@@ -122,8 +128,15 @@ def _extract_model(stem: str) -> str:
 
 
 def load_and_standardize(domain: str, ai_model: str, csv_path: Path) -> pd.DataFrame:
-    """Load a single CSV and standardize its columns."""
+    """Load a single CSV and standardize its columns.
+
+    Deduplicates on (essay_id, version) to protect against known upstream
+    duplication in Sondos's Abstract v2 _clean CSVs (≈30–40% duplicate keys —
+    some identical, some with minor generation variants for the same slot).
+    The first occurrence is kept for deterministic, reproducible output.
+    """
     df = pd.read_csv(csv_path)
+    n_in = len(df)
 
     # Normalize ID column: News uses 'id' instead of 'essay_id'
     if "id" in df.columns and "essay_id" not in df.columns:
@@ -135,6 +148,19 @@ def load_and_standardize(domain: str, ai_model: str, csv_path: Path) -> pd.DataF
 
     # Ensure essay_id is string
     df["essay_id"] = df["essay_id"].astype(str)
+
+    # --- Deduplication -----------------------------------------------------
+    # Step 1: drop fully-identical rows (cheap, unambiguous).
+    df = df.drop_duplicates()
+    # Step 2: drop (essay_id, version) key duplicates, keeping the first row.
+    # Sondos's data model is one row per (essay_id, version); extra rows with
+    # the same key are treated as redundant variants regardless of text diffs.
+    if {"essay_id", "version"}.issubset(df.columns):
+        df = df.drop_duplicates(subset=["essay_id", "version"], keep="first")
+    n_out = len(df)
+    if n_in != n_out:
+        print(f"    [dedup] {csv_path.name}: {n_in} -> {n_out} rows "
+              f"({n_in - n_out} duplicates removed)")
 
     # Keep only standard columns that exist in this file
     keep = [c for c in STANDARD_COLS if c in df.columns]
@@ -215,9 +241,12 @@ def write_aes_chains_jsonl(csv_files: list[tuple[str, str, Path]], output_dir: P
             if domain not in domain_files:
                 domain_files[domain] = open(domain_path, "w")
 
-            # Stream CSV and group by essay_id
-            docs = defaultdict(list)
+            # Stream CSV and group by essay_id. Dedupe on (essay_id, version)
+            # keeping the first row; rows with duplicate keys are counted and
+            # reported so we notice if upstream duplication regresses.
+            docs = defaultdict(dict)     # {eid: {version: row}}
             id_col = None
+            csv_row_dups = 0
 
             with open(csv_path, newline="", encoding="utf-8") as f:
                 reader = csv_mod.DictReader(f)
@@ -232,11 +261,20 @@ def write_aes_chains_jsonl(csv_files: list[tuple[str, str, Path]], output_dir: P
 
                 for row in reader:
                     eid = row[id_col]
-                    docs[eid].append(row)
+                    ver = row.get("version", "")
+                    if ver in docs[eid]:
+                        csv_row_dups += 1
+                        continue  # keep first occurrence, drop later duplicates
+                    docs[eid][ver] = row
+
+            if csv_row_dups:
+                print(f"    [dedup] {csv_path.name}: dropped {csv_row_dups} "
+                      f"duplicate (essay_id, version) rows from JSONL stream")
 
             # Convert each document group to a record
-            for eid, rows in docs.items():
-                rows.sort(key=lambda r: r.get("version", ""))
+            for eid, version_map in docs.items():
+                rows = sorted(version_map.values(),
+                              key=lambda r: r.get("version", ""))
                 history = []
 
                 for row in rows:
@@ -251,9 +289,20 @@ def write_aes_chains_jsonl(csv_files: list[tuple[str, str, Path]], output_dir: P
                     if not text or not text.strip():
                         text = " ".join(str(t) for t in tokens_raw)
 
-                    sentence_labels = _derive_sentence_labels(
-                        tokens_raw, token_labels_str,
-                    )
+                    # Prefer Sondos's explicit sentence-level labels when the
+                    # CSV provides them (v2 _clean files, April 14+). Fall back
+                    # to deriving from token labels for older CSV layouts.
+                    sentences_raw = _parse_json_field(row.get("sentences", "[]"))
+                    sent_labels_raw = _parse_json_field(row.get("sent_labels", "[]"))
+                    if sent_labels_raw:
+                        sentence_labels = [
+                            "ai" if lab == 1 else "human"
+                            for lab in sent_labels_raw
+                        ]
+                    else:
+                        sentence_labels = _derive_sentence_labels(
+                            tokens_raw, token_labels_str,
+                        )
 
                     ai_ratio = row.get("AI_token_ratio", "0.0")
                     try:
@@ -273,6 +322,10 @@ def write_aes_chains_jsonl(csv_files: list[tuple[str, str, Path]], output_dir: P
                         "operation": op,
                         "ai_ratio": ai_ratio,
                     }
+                    # Surface Sondos's raw sentence list when available so
+                    # sentence-level evaluators don't have to re-split text.
+                    if sentences_raw:
+                        entry["sentences"] = sentences_raw
                     history.append(entry)
 
                 record = {
