@@ -114,43 +114,109 @@ class DetectLLMDetector(BaseDetector):
         return self._map_to_words(words, text, offsets, token_scores)
 
     def _detect_single(self, text: str) -> Dict:
-        """Run detection on a single text, producing per-word labels."""
-        # Auto-calibrate on first call if threshold="auto"
+        """Run detection on a single text, producing per-word labels.
+
+        Robust to OOM on long inputs: retries the forward pass with progressively
+        shorter token windows (1024 → 512 → 256 → 128). Always returns the full
+        metadata schema; `truncated` / `effective_max_length` record what happened.
+        Auto-calibration (when threshold='auto') is deferred to the first
+        successful forward pass below — reusing those word scores avoids a
+        separate, OOM-prone calibration forward pass.
+        """
+        words = text.split()
+
+        # Forward pass with OOM retry. Each retry halves max_length.
+        max_lengths_to_try = [self.max_length]
+        n = self.max_length
+        while n > 128:
+            n = max(128, n // 2)
+            max_lengths_to_try.append(n)
+
+        encoding = None
+        pred_logits = None
+        labels = None
+        offsets = None
+        used_max_length = None
+        oom_history = []
+
+        token_scores = None
+        doc_score = None
+        for attempt_max_len in max_lengths_to_try:
+            try:
+                encoding = self.tokenizer(
+                    text,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=attempt_max_len,
+                    return_offsets_mapping=True,
+                )
+                input_ids = encoding["input_ids"].to(self.device)
+                offsets = encoding["offset_mapping"][0].tolist()
+
+                with torch.no_grad():
+                    outputs = self.model(input_ids)
+                    logits = outputs.logits
+
+                    labels = input_ids[0, 1:]
+                    pred_logits = logits[0, :-1]
+                    # Run the vocab-size ops (rank, log_softmax) under no_grad and
+                    # within the OOM-retry try, since these can OOM on long inputs
+                    # even after the forward pass succeeds (gpt2-xl vocab=50257).
+                    token_scores = self._compute_token_scores(pred_logits, labels)
+                    doc_score = self._compute_doc_score(pred_logits, labels)
+
+                used_max_length = attempt_max_len
+                break
+            except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
+                # `RuntimeError` covers PyTorch OOM variants that don't subclass
+                # OutOfMemoryError on older builds. Re-raise non-OOM RuntimeErrors.
+                msg = str(exc).lower()
+                if "out of memory" not in msg and not isinstance(exc, torch.cuda.OutOfMemoryError):
+                    raise
+                oom_history.append(attempt_max_len)
+                # Free per-attempt tensors before retrying.
+                encoding = None
+                pred_logits = None
+                token_scores = None
+                doc_score = None
+                torch.cuda.empty_cache()
+                continue
+
+        if pred_logits is None or token_scores is None or doc_score is None:
+            # All retries exhausted — return a payload with full schema, label=0.
+            torch.cuda.empty_cache()
+            return {
+                "text": text,
+                "label": 0,
+                "score": 0.5,
+                "metadata": {
+                    "word_labels": ["human"] * len(words),
+                    "word_logits": [[0.5, 0.5]] * len(words),
+                    "metric": self.metric,
+                    "model": self.model_path,
+                    "threshold": float(self.threshold),
+                    "raw_doc_score": None,
+                    "effective_max_length": None,
+                    "configured_max_length": int(self.max_length),
+                    "input_text_len": len(text),
+                    "input_word_count": len(words),
+                    "subword_token_count": 0,
+                    "truncated": True,
+                    "oom_retry_history": oom_history,
+                    "oom_failed": True,
+                    "auto_threshold": bool(self.auto_threshold),
+                },
+            }
+
+        word_scores = self._map_to_words(words, text, offsets, token_scores)
+
+        # Auto-calibrate on first successful detect (OOM-safe by reusing the
+        # same word_scores produced by the OOM-retry forward pass above).
         if self.auto_threshold and not self._calibrated:
-            # Use this text to set a rough baseline — will be refined by calibrate()
-            scores = self._get_word_scores(text)
-            valid = [s for s in scores if s is not None]
+            valid = [s for s in word_scores if s is not None]
             if valid:
-                # Set threshold at 75th percentile of this text's scores
-                # (assuming mix of human/AI, top 25% most "AI-like" → classified as AI)
                 self.threshold = float(np.percentile(valid, 75))
                 self._calibrated = True
-
-        # Tokenize with offset mapping for subword→word alignment
-        encoding = self.tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=self.max_length,
-            return_offsets_mapping=True,
-        )
-
-        input_ids = encoding["input_ids"].to(self.device)
-        offsets = encoding["offset_mapping"][0].tolist()
-
-        # Forward pass
-        with torch.no_grad():
-            outputs = self.model(input_ids)
-            logits = outputs.logits
-
-        labels = input_ids[0, 1:]
-        pred_logits = logits[0, :-1]
-
-        token_scores = self._compute_token_scores(pred_logits, labels)
-
-        # Map subword scores → word-level scores (used only for per-word labels)
-        words = text.split()
-        word_scores = self._map_to_words(words, text, offsets, token_scores)
 
         # Threshold to get binary labels (higher score = more AI-like)
         word_labels = []
@@ -165,12 +231,10 @@ class DetectLLMDetector(BaseDetector):
                 p_ai = float(1.0 / (1.0 + np.exp(-(ws - self.threshold))))
                 word_logits.append([1.0 - p_ai, p_ai])
 
-        # Document-level score — paper's formula (§3.1 of arXiv 2306.05540).
-        # Averaging per-token scores at the word level is a different statistic and
-        # destroys separation (see evaluate/reproductions/WRAPPER_FIXES_TODO.md).
-        doc_score = self._compute_doc_score(pred_logits, labels)
         doc_p_ai = float(1.0 / (1.0 + np.exp(-(doc_score - self.threshold))))
         doc_label = 1 if doc_p_ai >= 0.5 else 0
+
+        subword_token_count = int(encoding["input_ids"].shape[1]) if encoding is not None else 0
 
         return {
             "text": text,
@@ -181,8 +245,17 @@ class DetectLLMDetector(BaseDetector):
                 "word_logits": word_logits,
                 "metric": self.metric,
                 "model": self.model_path,
-                "threshold": self.threshold,
-                "raw_doc_score": doc_score,
+                "threshold": float(self.threshold),
+                "raw_doc_score": float(doc_score),
+                "effective_max_length": int(used_max_length),
+                "configured_max_length": int(self.max_length),
+                "input_text_len": len(text),
+                "input_word_count": len(words),
+                "subword_token_count": subword_token_count,
+                "truncated": bool(used_max_length < self.max_length),
+                "oom_retry_history": oom_history,
+                "oom_failed": False,
+                "auto_threshold": bool(self.auto_threshold),
             },
         }
 

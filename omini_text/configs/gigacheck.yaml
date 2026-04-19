@@ -19,6 +19,22 @@ device: auto  # Options: "auto", "cuda", "cuda:0", "cpu"
 # display, harmful for leaderboard-style mAP. Keep 0.0 for paper-faithful behaviour.
 conf_interval_thresh: 0.0
 
+# Coverage-based pred_label thresholds (used only when the classification head is
+# UNTRAINED — i.e. `iitolstykh/GigaCheck-Detector-Multi`). The wrapper merges
+# overlapping intervals first, then:
+#   coverage >= ai_coverage_max → "ai"     (binary label = 1)
+#   coverage >  ai_coverage_min → "mixed"  (binary label = 1)
+#   else                        → "human"  (binary label = 0)
+# Defaults preserve the previous heuristic. Tune for HAT-Bench-style mixed text.
+ai_coverage_min: 0.1
+ai_coverage_max: 0.9
+# When deriving the coverage-based label, only consider DETR queries whose
+# softmax foreground prob ≥ this. Raw `ai_intervals` (all queries that pass
+# `conf_interval_thresh`) remain in metadata untouched. 0.5 = "the model itself
+# preferred AI for this span"; lower values are more permissive (good for spans
+# the model is uncertain about).
+coverage_conf_thresh: 0.5
+
 # Model Details:
 # - Architecture: Mistral-7B backbone + DETR for interval detection
 # - Training: Multi-domain training on LLMTrace dataset
