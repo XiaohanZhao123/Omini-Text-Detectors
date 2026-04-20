@@ -25,10 +25,121 @@ The UV environment is managed by `pyproject.toml` at the project root. The `.ven
 
 ## Storage
 
-- **Model cache**: `./cache` → symlinked to `/data/thor/xiaohan/Omini-Text/cache` (312GB available)
-- **Results output**: Write large results to `/data/thor/xiaohan/Omini-Text/results/` (not the home partition which is nearly full)
-- **Local data**: `data_local/external/sondos/v2/` contains the v2 multi-domain dataset (4 domains × 3 AI models)
-- **Prepared data**: `data_local/external/sondos/v2/prepared/csv/` and `prepared/jsonl/` contain standardized outputs from `evaluate/prepare_sondos_v2.py`
+The repo uses committed top-level symlinks (`cache/`, `data/`, `data_local/`)
+that point at an absolute path on external storage. The absolute path is
+**host-specific** — the committed value will not match every host. Known
+mount points seen so far:
+
+| Host               | External FS root                        |
+|--------------------|-----------------------------------------|
+| Azure `llmvideo13` | `/datadrive/xiaohan/Omini-Text/`        |
+| Other hosts        | `/data/thor/xiaohan/Omini-Text/` or `/data/spiderman/Omini-Text/` have been seen in committed symlinks |
+
+Always verify the symlinks resolve before running anything (see **Git
+worktree setup** below). Layout under the project root on external storage:
+
+- `cache/`     — HuggingFace / model cache (can be 100+ GB)
+- `data/`      — generated experiment data
+- `data_local/external/sondos/v2/` — raw v2 multi-domain dataset (4 domains × 3 AI models)
+- `data_local/external/sondos/v2/prepared/{csv,jsonl}/` — standardized outputs from `evaluate/prepare_sondos_v2.py`
+- `results/`   — large experiment outputs; **do not** write under `$HOME`
+
+## Git worktree setup (start here on a fresh worktree)
+
+New worktrees under `~/.omnara/worktrees/...` (or `git worktree add` anywhere)
+inherit committed state from the branch tip, which includes the absolute-path
+symlinks above. On any host where that path differs from the current box,
+they will be dangling. Run this 4-step checklist **before** `uv sync` or
+anything else.
+
+### 1. Discover the right external filesystem on this host
+
+```bash
+df -h | awk 'NR==1 || /datadrive|^\/data|^\/mnt|^\/scratch/ {print}'
+```
+
+Pick the largest non-root writable mount (see the global user CLAUDE.md
+"Storage discipline" section). On `llmvideo13` this is `/datadrive` (8 TB
+XFS, `qid:users`-writable under `/datadrive/xiaohan/`).
+
+### 2. Verify or repair the top-level symlinks
+
+```bash
+for p in cache data data_local; do
+  target=$(readlink "$p" 2>/dev/null || echo "MISSING")
+  if [ -e "$p" ]; then echo "OK     $p -> $target"
+  else                 echo "BROKEN $p -> $target"
+  fi
+done
+```
+
+If any are broken, repoint them at the per-user project dir on external
+storage (adjust the root to whatever step 1 picked):
+
+```bash
+EXT=/datadrive/xiaohan/Omini-Text
+mkdir -p "$EXT"/{cache,data,data_local,results}
+for p in cache data data_local; do
+  rm -f "$p"
+  ln -sfn "$EXT/$p" "$p"
+done
+```
+
+**Do not commit the repoint.** The fixed symlinks are host-specific; let
+them show as `M` in `git status` on this worktree. When committing
+changes from this worktree, explicitly stage files (`git add <paths>`) —
+never `git add -A` — to avoid baking this host's absolute paths into
+the branch. If you need to reset before pushing: `git checkout -- cache data data_local`.
+
+### 3. Export UV env vars before `uv sync`
+
+```bash
+export UV_CACHE_DIR=/datadrive/xiaohan/uv-cache   # keep package cache off small $HOME
+export UV_LINK_MODE=copy                          # cache and .venv on different FS; silences hardlink-fallback warnings
+```
+
+`UV_CACHE_DIR` prevents filling the home/root partition (which is ~90%
+full on `llmvideo13`). `UV_LINK_MODE=copy` suppresses the noisy
+`Failed to hardlink files; falling back to full copy` warning that UV
+prints on every install when the cache and target `.venv/` live on
+different filesystems.
+
+### 4. Sync and smoke-test
+
+```bash
+uv sync
+uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.device_count())"
+```
+
+Expect `True` and the host's GPU count (4 on `llmvideo13`).
+
+### Known missing dependency
+
+`pandas` is used by several analysis and preparation scripts under
+`evaluate/` and `analysis/` but is **not** in `pyproject.toml` at the
+moment. On first use:
+
+```bash
+uv pip install pandas
+```
+
+If you hit more missing deps, prefer adding them to `pyproject.toml` and
+re-running `uv sync` rather than chaining `uv pip install` calls — the
+latter drifts from the lockfile.
+
+### Optional: share the main checkout's `.venv`
+
+A fresh worktree creates its own `.venv/` (~2 GB), duplicating packages.
+If disk pressure matters and the worktree is on a compatible commit, you
+can reuse the main checkout's env:
+
+```bash
+export UV_PROJECT_ENVIRONMENT=/home/qid/xiaohan/Omini-Text-Detectors/.venv
+```
+
+Only do this when dependency pins have not diverged between the worktree
+and the main branch — otherwise `uv run` will silently use stale
+packages. Default to a fresh venv unless you have a reason.
 
 ## Project Overview
 

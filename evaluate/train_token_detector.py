@@ -766,13 +766,51 @@ ARCH_DEFAULTS = {
 }
 
 
+def _dispatch_to_external_arch(arch: str):
+    """Some archs have their own standalone trainer scripts; forward argv to them
+    and keep --arch as the CLI entry point."""
+    import os as _os, sys as _sys
+    # Drop --arch <name> from argv before exec; the child script doesn't know it.
+    argv = _sys.argv[1:]
+    out = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--arch":
+            i += 2
+            continue
+        out.append(argv[i])
+        i += 1
+
+    if arch == "damasha-lora":
+        script = Path(__file__).resolve().parent / "train_damasha_lora.py"
+    elif arch == "gigacheck-lora":
+        script = Path(__file__).resolve().parent / "train_gigacheck_lora.py"
+    else:
+        raise ValueError(f"Unknown external arch: {arch}")
+
+    cmd = [_sys.executable, str(script), *out]
+    print(f"[train_token_detector] dispatching to {script}", flush=True)
+    _os.execvp(cmd[0], cmd)
+
+
 def main():
+    # Early-dispatch for archs with standalone trainer scripts. This has to happen
+    # before we build the argparse (which doesn't know the args of the sub-scripts).
+    if "--arch" in sys.argv:
+        i = sys.argv.index("--arch")
+        if i + 1 < len(sys.argv):
+            arch = sys.argv[i + 1]
+            if arch in {"damasha-lora", "gigacheck-lora"}:
+                _dispatch_to_external_arch(arch)
+                return  # unreachable after execvp
+
     p = argparse.ArgumentParser(
-        description="Fine-tune AI text detectors (deberta-lora / genai-sentence / gl-clic)")
+        description="Fine-tune AI text detectors (deberta-lora / genai-sentence / gl-clic / damasha-lora / gigacheck-lora)")
 
     # Architecture
     p.add_argument("--arch", default="deberta-lora",
-                   choices=["deberta-lora", "genai-sentence", "gl-clic"],
+                   choices=["deberta-lora", "genai-sentence", "gl-clic",
+                            "damasha-lora", "gigacheck-lora"],
                    help="Model architecture")
 
     # Data & model

@@ -9,19 +9,41 @@ dependencies = [
     "pyyaml",
     "numpy",
     "torch>=2.0",
-    "transformers>=4.30",
+    "transformers==4.50.1",
     "huggingface_hub",
     "scipy",
     "fastNLP",
     "torchvision>=0.25.0",
     "scikit-learn>=1.8.0",
     "matplotlib>=3.10.8",
+    "pandas",
+    # LoRA / fine-tuning stack
+    "peft>=0.14",
+    "accelerate",
+    "deepspeed",
+    "torchmetrics",
+    "clearml",
+    "python-dotenv",
+    "bitsandbytes",
+    # DAMASHA + gigacheck extras
+    "pytorch-crf",
+    "textstat",
+    "nltk",
+    "omegaconf",
+    "intervaltree",
+    "dacite",
+    "loguru",
+    "protobuf",
+    "sentencepiece",
+    "tensorboard",
+    "openai",     # required by baseline/seqxgpt/.../backend_utils.py (module-level import)
+    "msgpack",    # required by baseline/seqxgpt/.../backend_utils.py
 ]
 
 [project.optional-dependencies]
 seqxgpt = [
     "torch>=2.0",
-    "transformers>=4.30",
+    "transformers==4.50.1",
     "huggingface_hub",
     "scipy",
     "fastNLP",
