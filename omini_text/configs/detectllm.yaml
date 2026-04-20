@@ -12,11 +12,14 @@ device: auto
 
 # Detection Parameters
 max_length: 1024
-threshold: auto      # "auto" = calibrate on first batch; or set a float value
+threshold: null      # Paper-faithful: rank by `score` (raw doc-level LRR) for AUROC.
+                     # Paper does not define a binary operating point; default
+                     # leaves `label`=0 (no claim). Set a float (e.g. 1.95 for
+                     # gpt2-xl-on-XSum-ish prose) to derive a binary label.
 metric: lrr          # Primary metric: lrr, logrank, entropy, likelihood
 
 # Notes:
 # - Zero-shot: no training needed, uses proxy LM to score tokens
-# - Token-level: produces per-word binary labels
+# - Doc-level: paper reports AUROC on raw LRR; `score` field is the rankable value
 # - GPU: ~6GB for gpt2-xl, ~14GB for llama-7b
-# - LRR = -log_prob / log_rank (lower = more AI-like for causal LMs)
+# - LRR = (-Σ log p) / (Σ log r) — higher = more AI-like in this wrapper

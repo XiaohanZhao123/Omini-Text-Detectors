@@ -138,19 +138,29 @@ def _find_threshold(
 # ---------- Data loading ----------------------------------------------------
 
 
-def load_raid_split(split: str) -> pd.DataFrame:
-    """Load `Shengkun/Raid_split:<split>` as a DataFrame with needed columns."""
-    print(f"[data] loading Shengkun/Raid_split split={split}")
+def load_raid_split(split: str, attack_filter: str | None = None) -> pd.DataFrame:
+    """Load `Shengkun/Raid_split:<split>` as a DataFrame with needed columns.
+
+    `attack_filter`:
+        None        — return everything (leaderboard's `all` aggregate).
+        "none"      — only attack=="none" rows (leaderboard's `no_adversarial`).
+        "non_none"  — only attack!="none" rows (strict adversarial-only subset).
+    """
+    print(f"[data] loading Shengkun/Raid_split split={split} attack_filter={attack_filter}")
     ds = load_dataset("Shengkun/Raid_split", split=split)
     cols = ["id", "model", "attack", "domain", "generation"]
-    # keep only columns we need, drop rows with empty generation
     df = pd.DataFrame({c: ds[c] for c in cols})
     df["generation"] = df["generation"].fillna("").astype(str)
     df = df[df["generation"].str.strip().astype(bool)].reset_index(drop=True)
+    if attack_filter == "none":
+        df = df[df["attack"] == "none"].reset_index(drop=True)
+    elif attack_filter == "non_none":
+        df = df[df["attack"] != "none"].reset_index(drop=True)
     print(
-        f"  loaded {len(df)} rows after dropping empty generations. "
+        f"  loaded {len(df)} rows after filter. "
         f"unique domains={sorted(df['domain'].unique())}; "
-        f"human rows={int((df['model'] == 'human').sum())}"
+        f"human rows={int((df['model'] == 'human').sum())}; "
+        f"ai rows={int((df['model'] != 'human').sum())}"
     )
     return df
 
@@ -365,8 +375,14 @@ def evaluate_split(
 
 def main(args: argparse.Namespace) -> None:
     # ---- Load both splits up front -----------------------------------------
-    df_noattack = load_raid_split("test")
-    df_attack = load_raid_split("test_attack")
+    # `Shengkun/Raid_split:test` is a mixed-attack subset of the canonical
+    # RAID test. Leaderboard's `no_adversarial` is strictly attack=="none"; we
+    # filter to match. Leaderboard's `all` aggregates no-attack + adversarial;
+    # `test_attack` split is adversarial-only (no attack=="none" rows) and we
+    # use it plus the attack=="none" rows from `test` to form the `all`
+    # aggregate below.
+    df_noattack = load_raid_split("test", attack_filter="none")
+    df_attack = load_raid_split("test_attack")  # already adversarial-only
 
     # Subsample each (keep all humans)
     df_noattack = subsample(df_noattack, args.n_ai, args.seed)

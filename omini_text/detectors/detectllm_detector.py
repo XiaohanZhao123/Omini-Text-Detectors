@@ -43,10 +43,15 @@ class DetectLLMDetector(BaseDetector):
             self.device = device
 
         self.max_length = config.get("max_length", 1024)
-        threshold_cfg = config.get("threshold", "auto")
-        self.auto_threshold = (threshold_cfg == "auto")
-        self.threshold = 0.0 if self.auto_threshold else float(threshold_cfg)
-        self._calibrated = not self.auto_threshold
+        # Paper (arXiv 2306.05540) reports AUROC by ranking on raw LRR; no
+        # binary operating threshold is defined. `score` returns the raw LRR
+        # value. `label` is only derived when the user supplies a numeric
+        # threshold; otherwise label=0 (no AI-claim made).
+        threshold_cfg = config.get("threshold", None)
+        if threshold_cfg in (None, "auto"):
+            self.threshold = None
+        else:
+            self.threshold = float(threshold_cfg)
         self.metric = config.get("metric", "lrr")
 
         if self.metric not in self.METRICS:
@@ -69,25 +74,38 @@ class DetectLLMDetector(BaseDetector):
         return self._detect_single(text)
 
     def calibrate(self, texts: List[str], quantile: float = 0.5):
-        """Auto-calibrate threshold from a set of (assumed human) texts.
+        """Calibrate threshold from a set of (assumed human) doc-level LRR scores.
 
-        Sets threshold at the given quantile of all per-word scores so that
-        ~quantile fraction of human words fall below the threshold.
+        Paper-faithful: thresholds the doc-level LRR at the given quantile of
+        the per-document raw scores. Use this only when a binary operating
+        point is required for downstream evaluation; the paper itself reports
+        AUROC, not accuracy.
 
         Args:
             texts: List of human-written texts for calibration
-            quantile: Fraction of scores that should be below threshold (default 0.5 = median)
+            quantile: Fraction of doc scores that should be below threshold
+                (default 0.5 = median)
         """
-        all_scores = []
+        doc_scores = []
         for text in texts:
-            scores = self._get_word_scores(text)
-            all_scores.extend([s for s in scores if s is not None])
+            encoding = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=self.max_length,
+            )
+            input_ids = encoding["input_ids"].to(self.device)
+            with torch.no_grad():
+                outputs = self.model(input_ids)
+                logits = outputs.logits
+                labels = input_ids[0, 1:]
+                pred_logits = logits[0, :-1]
+                doc_scores.append(self._compute_doc_score(pred_logits, labels))
 
-        if all_scores:
-            self.threshold = float(np.percentile(all_scores, quantile * 100))
-            self._calibrated = True
+        if doc_scores:
+            self.threshold = float(np.percentile(doc_scores, quantile * 100))
             print(f"DetectLLM: calibrated threshold={self.threshold:.4f} "
-                  f"from {len(all_scores)} word scores (q={quantile})")
+                  f"from {len(doc_scores)} doc-level LRR scores (q={quantile})")
 
     def _get_word_scores(self, text: str) -> List:
         """Compute per-word scores without applying threshold."""
@@ -114,14 +132,16 @@ class DetectLLMDetector(BaseDetector):
         return self._map_to_words(words, text, offsets, token_scores)
 
     def _detect_single(self, text: str) -> Dict:
-        """Run detection on a single text, producing per-word labels.
+        """Run detection on a single text.
+
+        Paper-faithful: `score` returns the raw doc-level LRR (rank by this
+        for paper AUROC). `label` is derived only when the user supplied a
+        numeric threshold; otherwise label=0 (no AI-claim made), since the
+        paper does not define a binary operating point.
 
         Robust to OOM on long inputs: retries the forward pass with progressively
         shorter token windows (1024 → 512 → 256 → 128). Always returns the full
         metadata schema; `truncated` / `effective_max_length` record what happened.
-        Auto-calibration (when threshold='auto') is deferred to the first
-        successful forward pass below — reusing those word scores avoids a
-        separate, OOM-prone calibration forward pass.
         """
         words = text.split()
 
@@ -182,19 +202,21 @@ class DetectLLMDetector(BaseDetector):
                 torch.cuda.empty_cache()
                 continue
 
+        threshold_value = None if self.threshold is None else float(self.threshold)
+
         if pred_logits is None or token_scores is None or doc_score is None:
             # All retries exhausted — return a payload with full schema, label=0.
             torch.cuda.empty_cache()
             return {
                 "text": text,
                 "label": 0,
-                "score": 0.5,
+                "score": 0.0,  # raw_doc_score unavailable; do not fabricate a probability
                 "metadata": {
                     "word_labels": ["human"] * len(words),
                     "word_logits": [[0.5, 0.5]] * len(words),
                     "metric": self.metric,
                     "model": self.model_path,
-                    "threshold": float(self.threshold),
+                    "threshold": threshold_value,
                     "raw_doc_score": None,
                     "effective_max_length": None,
                     "configured_max_length": int(self.max_length),
@@ -204,25 +226,17 @@ class DetectLLMDetector(BaseDetector):
                     "truncated": True,
                     "oom_retry_history": oom_history,
                     "oom_failed": True,
-                    "auto_threshold": bool(self.auto_threshold),
                 },
             }
 
         word_scores = self._map_to_words(words, text, offsets, token_scores)
 
-        # Auto-calibrate on first successful detect (OOM-safe by reusing the
-        # same word_scores produced by the OOM-retry forward pass above).
-        if self.auto_threshold and not self._calibrated:
-            valid = [s for s in word_scores if s is not None]
-            if valid:
-                self.threshold = float(np.percentile(valid, 75))
-                self._calibrated = True
-
-        # Threshold to get binary labels (higher score = more AI-like)
+        # Per-word labels: only derived when user supplied a numeric threshold
+        # (paper does not define a per-word operating point either).
         word_labels = []
         word_logits = []
         for ws in word_scores:
-            if ws is None:
+            if ws is None or self.threshold is None:
                 word_labels.append("human")
                 word_logits.append([0.5, 0.5])
             else:
@@ -231,21 +245,25 @@ class DetectLLMDetector(BaseDetector):
                 p_ai = float(1.0 / (1.0 + np.exp(-(ws - self.threshold))))
                 word_logits.append([1.0 - p_ai, p_ai])
 
-        doc_p_ai = float(1.0 / (1.0 + np.exp(-(doc_score - self.threshold))))
-        doc_label = 1 if doc_p_ai >= 0.5 else 0
+        # Paper-faithful: `score` is raw doc-level LRR (rank by this for AUROC).
+        # `label` is derived only when threshold is numeric.
+        if self.threshold is None:
+            doc_label = 0
+        else:
+            doc_label = 1 if doc_score > self.threshold else 0
 
         subword_token_count = int(encoding["input_ids"].shape[1]) if encoding is not None else 0
 
         return {
             "text": text,
             "label": doc_label,
-            "score": doc_p_ai,
+            "score": float(doc_score),  # raw doc-level LRR — paper-faithful
             "metadata": {
                 "word_labels": word_labels,
                 "word_logits": word_logits,
                 "metric": self.metric,
                 "model": self.model_path,
-                "threshold": float(self.threshold),
+                "threshold": threshold_value,
                 "raw_doc_score": float(doc_score),
                 "effective_max_length": int(used_max_length),
                 "configured_max_length": int(self.max_length),
@@ -255,7 +273,6 @@ class DetectLLMDetector(BaseDetector):
                 "truncated": bool(used_max_length < self.max_length),
                 "oom_retry_history": oom_history,
                 "oom_failed": False,
-                "auto_threshold": bool(self.auto_threshold),
             },
         }
 
