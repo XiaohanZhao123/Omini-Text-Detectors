@@ -24,8 +24,11 @@ For each row we need these fields (present in our saved DAMASHA output):
 Output (written per cell):
     summary_sentence.json  — canonical shape, sibling of summary.json
       {
-        "aggregation_rule": ">50% majority of word_labels per sentence",
-        "note": "Paper defines no sentence-level rule; this is a wrapper convention.",
+        "level_adaptation": {
+          "paper_native_level":     "token + span-boundary",
+          "wrapper_reported_level": "sentence",
+          "aggregation_rule":       ">50% majority of word_labels per sentence",
+        },
         "metrics_overall"      : {...},
         "metrics_by_version"   : {...},
         "metrics_by_operation" : {...},
@@ -48,12 +51,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from evaluate.reproductions.run_on_new_data import compute_metrics, slice_metrics  # noqa: E402
 
-SENTINEL_RULE = ">50% majority of word_labels per sentence"
-SENTINEL_NOTE = (
-    "Paper defines no sentence-level rule; this is a wrapper convention. "
-    "Per-sentence score is the AI-word ratio, so the threshold can be "
-    "re-derived downstream without re-running the model."
-)
+LEVEL_ADAPTATION = {
+    "paper_native_level": "token + span-boundary",
+    "wrapper_reported_level": "sentence",
+    "aggregation_rule": ">50% majority of word_labels per sentence",
+}
 
 
 def _parse_list(obj):
@@ -175,8 +177,7 @@ def summarize_cell(cell: Path) -> dict | None:
     yp = [r["pred_label"] for r in rows]
     ys = [r["pred_score"] for r in rows]
     return {
-        "aggregation_rule": SENTINEL_RULE,
-        "note": SENTINEL_NOTE,
+        "level_adaptation":     LEVEL_ADAPTATION,
         "metrics_overall":      compute_metrics(yt, yp, ys),
         "metrics_by_version":   slice_metrics(rows, "version"),
         "metrics_by_operation": slice_metrics(rows, "operation"),
