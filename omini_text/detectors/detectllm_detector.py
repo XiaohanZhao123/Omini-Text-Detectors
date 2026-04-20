@@ -43,10 +43,15 @@ class DetectLLMDetector(BaseDetector):
             self.device = device
 
         self.max_length = config.get("max_length", 1024)
-        threshold_cfg = config.get("threshold", "auto")
-        self.auto_threshold = (threshold_cfg == "auto")
-        self.threshold = 0.0 if self.auto_threshold else float(threshold_cfg)
-        self._calibrated = not self.auto_threshold
+        # Paper (arXiv 2306.05540) reports AUROC by ranking on raw LRR; no
+        # binary operating threshold is defined. `score` returns the raw LRR
+        # value. `label` is only derived when the user supplies a numeric
+        # threshold; otherwise label=0 (no AI-claim made).
+        threshold_cfg = config.get("threshold", None)
+        if threshold_cfg in (None, "auto"):
+            self.threshold = None
+        else:
+            self.threshold = float(threshold_cfg)
         self.metric = config.get("metric", "lrr")
 
         if self.metric not in self.METRICS:
@@ -69,25 +74,38 @@ class DetectLLMDetector(BaseDetector):
         return self._detect_single(text)
 
     def calibrate(self, texts: List[str], quantile: float = 0.5):
-        """Auto-calibrate threshold from a set of (assumed human) texts.
+        """Calibrate threshold from a set of (assumed human) doc-level LRR scores.
 
-        Sets threshold at the given quantile of all per-word scores so that
-        ~quantile fraction of human words fall below the threshold.
+        Paper-faithful: thresholds the doc-level LRR at the given quantile of
+        the per-document raw scores. Use this only when a binary operating
+        point is required for downstream evaluation; the paper itself reports
+        AUROC, not accuracy.
 
         Args:
             texts: List of human-written texts for calibration
-            quantile: Fraction of scores that should be below threshold (default 0.5 = median)
+            quantile: Fraction of doc scores that should be below threshold
+                (default 0.5 = median)
         """
-        all_scores = []
+        doc_scores = []
         for text in texts:
-            scores = self._get_word_scores(text)
-            all_scores.extend([s for s in scores if s is not None])
+            encoding = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=self.max_length,
+            )
+            input_ids = encoding["input_ids"].to(self.device)
+            with torch.no_grad():
+                outputs = self.model(input_ids)
+                logits = outputs.logits
+                labels = input_ids[0, 1:]
+                pred_logits = logits[0, :-1]
+                doc_scores.append(self._compute_doc_score(pred_logits, labels))
 
-        if all_scores:
-            self.threshold = float(np.percentile(all_scores, quantile * 100))
-            self._calibrated = True
+        if doc_scores:
+            self.threshold = float(np.percentile(doc_scores, quantile * 100))
             print(f"DetectLLM: calibrated threshold={self.threshold:.4f} "
-                  f"from {len(all_scores)} word scores (q={quantile})")
+                  f"from {len(doc_scores)} doc-level LRR scores (q={quantile})")
 
     def _get_word_scores(self, text: str) -> List:
         """Compute per-word scores without applying threshold."""
@@ -114,49 +132,111 @@ class DetectLLMDetector(BaseDetector):
         return self._map_to_words(words, text, offsets, token_scores)
 
     def _detect_single(self, text: str) -> Dict:
-        """Run detection on a single text, producing per-word labels."""
-        # Auto-calibrate on first call if threshold="auto"
-        if self.auto_threshold and not self._calibrated:
-            # Use this text to set a rough baseline — will be refined by calibrate()
-            scores = self._get_word_scores(text)
-            valid = [s for s in scores if s is not None]
-            if valid:
-                # Set threshold at 75th percentile of this text's scores
-                # (assuming mix of human/AI, top 25% most "AI-like" → classified as AI)
-                self.threshold = float(np.percentile(valid, 75))
-                self._calibrated = True
+        """Run detection on a single text.
 
-        # Tokenize with offset mapping for subword→word alignment
-        encoding = self.tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=self.max_length,
-            return_offsets_mapping=True,
-        )
+        Paper-faithful: `score` returns the raw doc-level LRR (rank by this
+        for paper AUROC). `label` is derived only when the user supplied a
+        numeric threshold; otherwise label=0 (no AI-claim made), since the
+        paper does not define a binary operating point.
 
-        input_ids = encoding["input_ids"].to(self.device)
-        offsets = encoding["offset_mapping"][0].tolist()
-
-        # Forward pass
-        with torch.no_grad():
-            outputs = self.model(input_ids)
-            logits = outputs.logits
-
-        labels = input_ids[0, 1:]
-        pred_logits = logits[0, :-1]
-
-        token_scores = self._compute_token_scores(pred_logits, labels)
-
-        # Map subword scores → word-level scores
+        Robust to OOM on long inputs: retries the forward pass with progressively
+        shorter token windows (1024 → 512 → 256 → 128). Always returns the full
+        metadata schema; `truncated` / `effective_max_length` record what happened.
+        """
         words = text.split()
+
+        # Forward pass with OOM retry. Each retry halves max_length.
+        max_lengths_to_try = [self.max_length]
+        n = self.max_length
+        while n > 128:
+            n = max(128, n // 2)
+            max_lengths_to_try.append(n)
+
+        encoding = None
+        pred_logits = None
+        labels = None
+        offsets = None
+        used_max_length = None
+        oom_history = []
+
+        token_scores = None
+        doc_score = None
+        for attempt_max_len in max_lengths_to_try:
+            try:
+                encoding = self.tokenizer(
+                    text,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=attempt_max_len,
+                    return_offsets_mapping=True,
+                )
+                input_ids = encoding["input_ids"].to(self.device)
+                offsets = encoding["offset_mapping"][0].tolist()
+
+                with torch.no_grad():
+                    outputs = self.model(input_ids)
+                    logits = outputs.logits
+
+                    labels = input_ids[0, 1:]
+                    pred_logits = logits[0, :-1]
+                    # Run the vocab-size ops (rank, log_softmax) under no_grad and
+                    # within the OOM-retry try, since these can OOM on long inputs
+                    # even after the forward pass succeeds (gpt2-xl vocab=50257).
+                    token_scores = self._compute_token_scores(pred_logits, labels)
+                    doc_score = self._compute_doc_score(pred_logits, labels)
+
+                used_max_length = attempt_max_len
+                break
+            except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
+                # `RuntimeError` covers PyTorch OOM variants that don't subclass
+                # OutOfMemoryError on older builds. Re-raise non-OOM RuntimeErrors.
+                msg = str(exc).lower()
+                if "out of memory" not in msg and not isinstance(exc, torch.cuda.OutOfMemoryError):
+                    raise
+                oom_history.append(attempt_max_len)
+                # Free per-attempt tensors before retrying.
+                encoding = None
+                pred_logits = None
+                token_scores = None
+                doc_score = None
+                torch.cuda.empty_cache()
+                continue
+
+        threshold_value = None if self.threshold is None else float(self.threshold)
+
+        if pred_logits is None or token_scores is None or doc_score is None:
+            # All retries exhausted — return a payload with full schema, label=0.
+            torch.cuda.empty_cache()
+            return {
+                "text": text,
+                "label": 0,
+                "score": 0.0,  # raw_doc_score unavailable; do not fabricate a probability
+                "metadata": {
+                    "word_labels": ["human"] * len(words),
+                    "word_logits": [[0.5, 0.5]] * len(words),
+                    "metric": self.metric,
+                    "model": self.model_path,
+                    "threshold": threshold_value,
+                    "raw_doc_score": None,
+                    "effective_max_length": None,
+                    "configured_max_length": int(self.max_length),
+                    "input_text_len": len(text),
+                    "input_word_count": len(words),
+                    "subword_token_count": 0,
+                    "truncated": True,
+                    "oom_retry_history": oom_history,
+                    "oom_failed": True,
+                },
+            }
+
         word_scores = self._map_to_words(words, text, offsets, token_scores)
 
-        # Threshold to get binary labels (higher score = more AI-like)
+        # Per-word labels: only derived when user supplied a numeric threshold
+        # (paper does not define a per-word operating point either).
         word_labels = []
         word_logits = []
         for ws in word_scores:
-            if ws is None:
+            if ws is None or self.threshold is None:
                 word_labels.append("human")
                 word_logits.append([0.5, 0.5])
             else:
@@ -165,23 +245,34 @@ class DetectLLMDetector(BaseDetector):
                 p_ai = float(1.0 / (1.0 + np.exp(-(ws - self.threshold))))
                 word_logits.append([1.0 - p_ai, p_ai])
 
-        # Document-level: mean score across words
-        valid_scores = [s for s in word_scores if s is not None]
-        doc_score = float(np.mean(valid_scores)) if valid_scores else 0.0
-        doc_p_ai = float(1.0 / (1.0 + np.exp(-(doc_score - self.threshold))))
-        doc_label = 1 if doc_p_ai >= 0.5 else 0
+        # Paper-faithful: `score` is raw doc-level LRR (rank by this for AUROC).
+        # `label` is derived only when threshold is numeric.
+        if self.threshold is None:
+            doc_label = 0
+        else:
+            doc_label = 1 if doc_score > self.threshold else 0
+
+        subword_token_count = int(encoding["input_ids"].shape[1]) if encoding is not None else 0
 
         return {
             "text": text,
             "label": doc_label,
-            "score": doc_p_ai,
+            "score": float(doc_score),  # raw doc-level LRR — paper-faithful
             "metadata": {
                 "word_labels": word_labels,
                 "word_logits": word_logits,
                 "metric": self.metric,
                 "model": self.model_path,
-                "threshold": self.threshold,
-                "raw_doc_score": doc_score,
+                "threshold": threshold_value,
+                "raw_doc_score": float(doc_score),
+                "effective_max_length": int(used_max_length),
+                "configured_max_length": int(self.max_length),
+                "input_text_len": len(text),
+                "input_word_count": len(words),
+                "subword_token_count": subword_token_count,
+                "truncated": bool(used_max_length < self.max_length),
+                "oom_retry_history": oom_history,
+                "oom_failed": False,
             },
         }
 
@@ -244,6 +335,48 @@ class DetectLLMDetector(BaseDetector):
                 valid_max = lrr_np[~rank1_mask].max() if (~rank1_mask).any() else 1.0
                 lrr_np[rank1_mask] = valid_max + 1.0
             return lrr_np  # higher = more AI
+
+        raise ValueError(f"Unknown metric: {self.metric}")
+
+    def _compute_doc_score(self, logits, labels) -> float:
+        """Paper's document-level score per metric — NOT the mean of per-token scores.
+
+        For LRR the paper defines LRR = |Σ log p / Σ log r| = (-Σ log p) / (Σ log r) over
+        the whole document; the mean of per-token ratios is a different statistic.
+        Convention preserved: HIGHER = more AI-like.
+        """
+        log_probs = F.log_softmax(logits, dim=-1)
+        token_log_probs = log_probs.gather(
+            dim=-1, index=labels.unsqueeze(-1)
+        ).squeeze(-1).float()  # (seq_len,), negative
+
+        if self.metric == "likelihood":
+            return float(token_log_probs.mean().item())  # higher log p → more AI
+
+        if self.metric == "entropy":
+            probs = F.softmax(logits, dim=-1)
+            ent = -(probs * log_probs).sum(dim=-1)
+            return float(-ent.mean().item())  # lower entropy → more AI → negate
+
+        expanded = labels.unsqueeze(-1)
+        ranks = (logits > logits.gather(-1, expanded)).sum(-1).float() + 1
+        log_ranks = torch.log(ranks)
+
+        if self.metric == "rank":
+            return float(-ranks.mean().item())  # lower rank → more AI → negate
+
+        if self.metric == "logrank":
+            return float(-log_ranks.mean().item())
+
+        if self.metric == "lrr":
+            # Paper §3.1 / upstream baselines/all_baselines.py:
+            # LRR = -mean(log p) / mean(log r) = (-Σ log p) / (Σ log r), all tokens
+            # (no rank-1 filter — log(1)=0 is kept in the sum, matching upstream).
+            num = float(-token_log_probs.sum().item())
+            den = float(log_ranks.sum().item())
+            if den < 1e-6:
+                return 0.0
+            return num / den  # higher = more AI
 
         raise ValueError(f"Unknown metric: {self.metric}")
 

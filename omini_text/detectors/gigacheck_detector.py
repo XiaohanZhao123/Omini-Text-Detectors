@@ -56,6 +56,15 @@ class GigacheckDetector(BaseDetector):
             self.device = device
 
         self.conf_interval_thresh = config.get("conf_interval_thresh", 0.8)
+        # Coverage thresholds used when classification head is untrained (paper-faithful default).
+        # `ai_coverage_min`: any non-trivial AI coverage above this fraction → at least "mixed".
+        # `ai_coverage_max`: AI coverage above this fraction → "ai" (vs "mixed").
+        self.ai_coverage_min = float(config.get("ai_coverage_min", 0.1))
+        self.ai_coverage_max = float(config.get("ai_coverage_max", 0.9))
+        # Confidence threshold applied to merged intervals only when computing the
+        # coverage-based pred_label / score. Raw `ai_intervals` (all DETR queries
+        # passing `conf_interval_thresh`) are still returned untouched in metadata.
+        self.coverage_conf_thresh = float(config.get("coverage_conf_thresh", 0.5))
 
         # Load model
         self._load_model()
@@ -119,20 +128,57 @@ class GigacheckDetector(BaseDetector):
         if hasattr(ai_intervals, "tolist"):
             ai_intervals = ai_intervals.tolist()
 
+        # Length used for coverage-based label and score. Must be the truncated
+        # char-length the model actually sees (1024-token cap), NOT len(text).
+        # Otherwise long inputs silently under-count AI coverage → wrong label.
+        text_len = int(result.get("text_len", len(text)))
+        truncated = text_len < len(text)
+
+        # Merge overlapping intervals BEFORE coverage. With paper default
+        # conf_interval_thresh=0.0 every DETR query (45) passes through, and the
+        # raw spans frequently overlap — summing un-merged spans inflates coverage
+        # past 1.0 and forces the derived label to always be "ai".
+        merged_intervals_full = self._merge_intervals(
+            ai_intervals, conf_thresh=0.0
+        )
+        merged_intervals_for_label = self._merge_intervals(
+            ai_intervals, conf_thresh=self.coverage_conf_thresh
+        )
+
         # Extract prediction - derive from ai_intervals if classification head not trained
         probs = result.get("classification_head_probs", None)
         if "pred_label" in result:
             pred_label = result["pred_label"]
         else:
-            # Derive pred_label from ai_intervals when classification head is not trained
-            pred_label = self._derive_label_from_intervals(ai_intervals, len(text))
+            # Derive pred_label from MERGED intervals when classification head is untrained
+            pred_label = self._derive_label_from_intervals(
+                merged_intervals_for_label, text_len
+            )
 
         # Compute binary label: 1 if any AI content detected
         # pred_label can be "human", "ai", or "mixed"
         binary_label = 1 if pred_label in ["ai", "mixed"] else 0
 
-        # Compute AI score from probabilities or intervals
-        ai_score = self._compute_ai_score(probs, pred_label, ai_intervals, len(text))
+        # Compute AI score from probabilities or merged-interval coverage
+        ai_score = self._compute_ai_score(
+            probs, pred_label, merged_intervals_for_label, text_len
+        )
+
+        # Pre-decision features: per-query (start, end, prob) before any threshold
+        # filtering or merging. Useful for downstream calibration / threshold sweeps.
+        raw_query_predictions = [
+            [float(s), float(e), float(p)] for s, e, p in ai_intervals
+        ]
+
+        # Coverage statistics on the merged intervals (post-merge, scoring-time view)
+        merged_ai_chars_full = sum(
+            max(0, end - start) for start, end in merged_intervals_full
+        )
+        merged_ai_chars_label = sum(
+            max(0, end - start) for start, end in merged_intervals_for_label
+        )
+        coverage_full = merged_ai_chars_full / text_len if text_len > 0 else 0.0
+        coverage_label = merged_ai_chars_label / text_len if text_len > 0 else 0.0
 
         return {
             "text": text,
@@ -142,50 +188,81 @@ class GigacheckDetector(BaseDetector):
                 "model": self.model_path,
                 "pred_label": pred_label,
                 "ai_intervals": ai_intervals,
-                "classification_head_probs": [float(p) for p in probs] if probs is not None else None,
+                "ai_intervals_merged": [list(iv) for iv in merged_intervals_full],
+                "ai_intervals_merged_for_label": [
+                    list(iv) for iv in merged_intervals_for_label
+                ],
+                "raw_query_predictions": raw_query_predictions,
+                "classification_head_probs": (
+                    [float(p) for p in probs] if probs is not None else None
+                ),
                 "conf_interval_thresh": self.conf_interval_thresh,
+                "coverage_conf_thresh": self.coverage_conf_thresh,
+                "ai_coverage_min": self.ai_coverage_min,
+                "ai_coverage_max": self.ai_coverage_max,
+                "ai_coverage_full": float(coverage_full),
+                "ai_coverage_for_label": float(coverage_label),
+                "text_len_scored": text_len,
+                "text_len_full": len(text),
+                "truncated": truncated,
             },
         }
 
-    def _derive_label_from_intervals(self, ai_intervals: list, text_len: int) -> str:
-        """
-        Derive pred_label from AI intervals when classification head is not trained.
+    @staticmethod
+    def _merge_intervals(intervals, conf_thresh: float = 0.0):
+        """Merge overlapping `[start, end, (prob)]` regions, optionally pre-filtered.
 
-        Args:
-            ai_intervals: List of [start, end, confidence] intervals
-            text_len: Total text length in characters
-
-        Returns:
-            "human", "ai", or "mixed"
+        Returns a list of `(start, end)` tuples sorted by start, with no overlap.
+        Confidence is dropped after filtering (the merge is on geometry only).
         """
-        if not ai_intervals or text_len == 0:
+        from intervaltree import Interval, IntervalTree
+
+        cleaned = []
+        for iv in intervals:
+            if len(iv) >= 3:
+                s, e, p = iv[0], iv[1], iv[2]
+                if p < conf_thresh:
+                    continue
+            else:
+                s, e = iv[0], iv[1]
+            s, e = float(s), float(e)
+            if e <= s:
+                continue
+            cleaned.append((s, e))
+
+        if not cleaned:
+            return []
+
+        tree = IntervalTree(Interval(s, e) for s, e in cleaned)
+        tree.merge_overlaps(strict=False)
+        return [(int(round(i.begin)), int(round(i.end))) for i in sorted(tree)]
+
+    def _derive_label_from_intervals(self, merged_intervals: list, text_len: int) -> str:
+        """Derive pred_label from MERGED intervals when classification head is untrained.
+
+        Caller must pass already-merged, non-overlapping `[start, end]` regions
+        (use `_merge_intervals` first). Coverage thresholds come from config.
+        """
+        if not merged_intervals or text_len == 0:
             return "human"
 
-        # Calculate total AI coverage
-        total_ai_chars = 0
-        for interval in ai_intervals:
-            start, end = interval[0], interval[1]
-            total_ai_chars += max(0, end - start)
-
+        total_ai_chars = sum(max(0, end - start) for start, end in merged_intervals)
         coverage = total_ai_chars / text_len
 
-        # Thresholds for classification
-        if coverage >= 0.9:
+        if coverage >= self.ai_coverage_max:
             return "ai"
-        elif coverage > 0.1:
+        elif coverage > self.ai_coverage_min:
             return "mixed"
         else:
             return "human"
 
-    def _compute_ai_score(self, probs, pred_label: str, ai_intervals: list = None, text_len: int = 0) -> float:
-        """
-        Compute AI probability score from classification probabilities or intervals.
+    def _compute_ai_score(self, probs, pred_label: str, merged_intervals: list = None, text_len: int = 0) -> float:
+        """Compute AI probability score from classification probabilities or merged-interval coverage.
 
-        For detector model with 3 classes (human, ai, mixed):
-        - AI score = P(ai) + P(mixed), since mixed contains AI content
+        For detector model with 3 classes (human, ai, mixed): AI score = P(ai) + P(mixed).
+        Caller must pre-merge intervals (no overlaps) when passing the fallback path.
         """
         if probs is not None:
-            # Find indices for ai and mixed classes
             ai_idx = self.label2id.get("ai", None)
             mixed_idx = self.label2id.get("mixed", None)
 
@@ -197,12 +274,10 @@ class GigacheckDetector(BaseDetector):
 
             return min(ai_score, 1.0)
 
-        # Fallback: compute from ai_intervals coverage
-        if ai_intervals and text_len > 0:
-            total_ai_chars = sum(max(0, interval[1] - interval[0]) for interval in ai_intervals)
+        if merged_intervals and text_len > 0:
+            total_ai_chars = sum(max(0, end - start) for start, end in merged_intervals)
             return min(total_ai_chars / text_len, 1.0)
 
-        # Final fallback based on pred_label
         return 1.0 if pred_label in ["ai", "mixed"] else 0.0
 
     def intervals_to_word_labels(

@@ -4,16 +4,13 @@
 Evaluates DAMASHA, GigaCheck, SeqXGPT on essays and abstracts datasets
 with per-token ground-truth labels (0=human, 1=AI).
 
-Usage:
-    cd /data/spiderman/jiachengl/Omni-text
-
-    # Single method
+Usage (old data):
     python evaluate/aes/eval_token_level_new.py --methods damasha --device cuda:0
 
-    # All methods (run separately on different GPUs for speed)
-    python evaluate/aes/eval_token_level_new.py --methods damasha --device cuda:0
-    python evaluate/aes/eval_token_level_new.py --methods gigacheck --device cuda:1
-    python evaluate/aes/eval_token_level_new.py --methods seqxgpt --device cuda:2
+Usage (new data - April 2026):
+    python evaluate/aes/eval_token_level_new.py --methods damasha --device cuda:0 \
+        --new-data --data-dir draft/data_25_04_08/ \
+        --fields essays abstracts news reports
 
     # Smoke test
     python evaluate/aes/eval_token_level_new.py --methods damasha --max-samples 5
@@ -79,7 +76,11 @@ def load_csv_data(csv_path: str, split: Optional[str] = None, max_samples: Optio
     Args:
         split_mode: "custom" = 80/10/10 by essay_id (matches DeBERTa training), "csv" = use CSV's split column
     """
+    from evaluate.aes.data_loader_unified import normalize_df
+
     df = pd.read_csv(csv_path)
+    df = normalize_df(df)
+
     if split:
         if split_mode == "custom":
             df = apply_custom_split(df, split, seed=seed)
@@ -101,6 +102,11 @@ def load_csv_data(csv_path: str, split: Optional[str] = None, max_samples: Optio
             else:
                 continue  # skip malformed rows
 
+        try:
+            ai_spans_char = ast.literal_eval(row["ai_spans_char"])
+        except Exception:
+            ai_spans_char = []
+
         records.append({
             "essay_id": str(row["essay_id"]),
             "version": row["version"],
@@ -109,6 +115,7 @@ def load_csv_data(csv_path: str, split: Optional[str] = None, max_samples: Optio
             "num_tokens": len(tok_labels),
             "text": text,
             "true_labels": tok_labels,
+            "ai_spans_char": ai_spans_char,
             "boundary_pattern": row.get("boundary_pattern", ""),
         })
 
@@ -373,6 +380,7 @@ def evaluate_method(method, records, device, extra_kwargs=None):
                 "version": rec["version"],
                 "operation": rec["operation"],
                 "ai_ratio_gt": rec["ai_ratio_gt"],
+                "ai_spans_char": rec.get("ai_spans_char", []),
                 "num_tokens": rec["num_tokens"],
                 "boundary_pattern": rec["boundary_pattern"],
                 "pred_labels": pred,
@@ -394,6 +402,7 @@ def evaluate_method(method, records, device, extra_kwargs=None):
                 "version": rec["version"],
                 "operation": rec["operation"],
                 "ai_ratio_gt": rec["ai_ratio_gt"],
+                "ai_spans_char": rec.get("ai_spans_char", []),
                 "num_tokens": rec["num_tokens"],
                 "boundary_pattern": rec["boundary_pattern"],
                 "pred_labels": None,
@@ -516,30 +525,59 @@ def main():
     parser.add_argument("--detectllm-metric", default=None,
                         choices=["lrr", "logrank", "entropy", "likelihood", "rank"],
                         help="DetectLLM: override metric (default: use config)")
+    # New data mode
+    parser.add_argument("--new-data", action="store_true",
+                        help="Use new April 2026 dataset (manifest-based)")
+    parser.add_argument("--data-dir", default=None,
+                        help="Root dir for new data (default: draft/data_25_04_08/)")
+    parser.add_argument("--fields", nargs="+", default=None,
+                        choices=["essays", "abstracts", "news", "reports"],
+                        help="Fields to evaluate (new-data mode)")
+    parser.add_argument("--models", nargs="+", default=None,
+                        choices=["gpt-5.4", "gpt-5.4-nano", "gemini-2.5-flash"],
+                        help="AI source models to evaluate (new-data mode)")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     split = None if args.split == "all" else args.split
 
-    # Load data
-    dataset_paths = {}
-    if "essays" in args.datasets:
-        dataset_paths["essays"] = args.essays_path
-    if "abstracts" in args.datasets:
-        dataset_paths["abstracts"] = args.abstracts_path
+    # New data mode: use --split-mode csv by default
+    if args.new_data:
+        args.split_mode = "csv"
+        if args.output_dir == str(DEFAULT_OUTPUT):
+            output_dir = PROJECT_ROOT / "results" / "new_data_eval" / "token"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build dataset list
+    if args.new_data:
+        from evaluate.aes.data_loader_unified import get_dataset_files, save_run_config
+        dataset_list = get_dataset_files(
+            data_dir=args.data_dir, fields=args.fields, models=args.models
+        )
+        if not dataset_list:
+            print("ERROR: No dataset files found. Check --data-dir, --fields, --models.")
+            return
+        print(f"  New data mode: {len(dataset_list)} dataset files")
+    else:
+        dataset_list = []
+        if "essays" in args.datasets:
+            dataset_list.append(("essays", "legacy", Path(args.essays_path)))
+        if "abstracts" in args.datasets:
+            dataset_list.append(("abstracts", "legacy", Path(args.abstracts_path)))
 
     all_summaries = {}
 
     for method in args.methods:
         method_summaries = {}
 
-        for ds_name, ds_path in dataset_paths.items():
+        for field, model_short, ds_path in dataset_list:
+            ds_label = f"{field}/{model_short}" if args.new_data else field
             print(f"\n{'#'*60}")
-            print(f"  {method.upper()} on {ds_name.upper()} (split={args.split})")
+            print(f"  {method.upper()} on {ds_label.upper()} (split={args.split})")
             print(f"{'#'*60}")
 
+            t0_ds = time.time()
             records = load_csv_data(ds_path, split=split, max_samples=args.max_samples,
                                     split_mode=args.split_mode, seed=args.seed)
             print(f"  Loaded {len(records)} records")
@@ -570,9 +608,16 @@ def main():
                     extra["metric"] = args.detectllm_metric
 
             results = evaluate_method(method, records, args.device, extra)
+            elapsed_ds = time.time() - t0_ds
 
-            # Save per-doc predictions (include full token labels for trajectory analysis)
-            pred_path = output_dir / f"{method}_{ds_name}_predictions.jsonl"
+            # Save per-doc predictions
+            if args.new_data:
+                method_dir = output_dir / method
+                method_dir.mkdir(parents=True, exist_ok=True)
+                pred_path = method_dir / f"{field}_{model_short}_predictions.jsonl"
+            else:
+                pred_path = output_dir / f"{method}_{field}_predictions.jsonl"
+
             with open(pred_path, "w") as f:
                 for r in results:
                     f.write(json.dumps(r, default=str) + "\n")
@@ -585,19 +630,34 @@ def main():
             trajectories = build_trajectories(results)
 
             # Save per-essay version trajectories
-            traj_path = output_dir / f"{method}_{ds_name}_trajectories.json"
+            if args.new_data:
+                traj_path = method_dir / f"{field}_{model_short}_trajectories.json"
+            else:
+                traj_path = output_dir / f"{method}_{field}_trajectories.json"
             with open(traj_path, "w") as f:
                 json.dump(trajectories, f, indent=2, default=str)
             print(f"  Saved trajectories: {traj_path}")
 
-            method_summaries[ds_name] = {
+            ds_key = f"{field}_{model_short}" if args.new_data else field
+            method_summaries[ds_key] = {
                 "overall": overall,
                 "by_version": by_version,
                 "by_operation": by_operation,
             }
 
+            # Save run config (new data mode)
+            if args.new_data:
+                from evaluate.aes.data_loader_unified import save_run_config
+                save_run_config(
+                    output_dir=output_dir, method=method, field=field,
+                    model_short=model_short, csv_path=str(ds_path),
+                    device=args.device, split=args.split,
+                    n_samples=len(records), runtime_seconds=elapsed_ds,
+                    extra={"detectllm_metric": args.detectllm_metric} if method == "detectllm" else None,
+                )
+
             # Print summary
-            print(f"\n  --- {method}/{ds_name} Overall ---")
+            print(f"\n  --- {method}/{ds_label} Overall ---")
             if overall:
                 for k, v in overall.items():
                     if isinstance(v, float):

@@ -6,16 +6,21 @@
 model: fast-detectgpt
 
 # Model Configuration (two models: sampling + scoring)
-sampling_model_name: falcon-7b # See docs for available models
-scoring_model_name: falcon-7b-instruct # Can be same or different (if tokenizers compatible)
+# Default = paper headline cell: Table 1 white-box, Neo-2.7 / XSum = 0.9876 AUROC
+# (Bao et al., Fast-DetectGPT, ICLR 2024, arxiv 2310.05130).
+# When sampling==scoring, only one model is loaded (~5 GB fp16, fits any single GPU).
+sampling_model_name: gpt-neo-2.7B
+scoring_model_name: gpt-neo-2.7B
 
-# Recommended Combinations (pre-calibrated for accuracy):
-# - gpt-neo-2.7B + gpt-neo-2.7B: 82% accuracy, fastest (6-8GB VRAM)
-# - gpt-j-6B + gpt-neo-2.7B: 81% accuracy, good balance (12-16GB VRAM)
-# - falcon-7b + falcon-7b-instruct: 89% accuracy, best (14-18GB VRAM)
+# Pre-calibrated pairs (mu0/sigma0/mu1/sigma1 baked in
+# baseline/fast-detect-gpt/scripts/local_infer.py:79):
+# - gpt-neo-2.7B + gpt-neo-2.7B: paper headline AUROC 0.9876 (Table 1). DEFAULT, ~5 GB fp16.
+# - gpt-j-6B    + gpt-neo-2.7B: paper alt, ~12 GB total fp16.
+# - falcon-7b   + falcon-7b-instruct: post-publication accuracy optimisation
+#   (~28 GB total — needs A100/H100 or 2× 24 GB GPUs).
 
 # Device Configuration
-device: "0,1,2,3" # Multi-GPU recommended. Options: "0" (single), "0,1,2,3" (multi), "auto"
+device: "0" # Single GPU sufficient for default Neo-2.7B pair. Options: "0" (single), "0,1,2,3" (multi), "auto"
 
 # Cache Configuration
 cache_dir: "cache" # HuggingFace model cache directory (relative or absolute)

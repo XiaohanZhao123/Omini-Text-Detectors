@@ -61,23 +61,46 @@ class AdaLocDetector(BaseDetector):
 
     def _load_model(self):
         """Load RoBERTa feature extractor and AdaLoc sentence head."""
-        # Try loading full checkpoint (saved via torch.save on the model object)
+        # Try loading full checkpoint (saved via torch.save on the model object).
+        # The checkpoint is a pickled module that references the upstream
+        # `AdaLoc` package (saved during training with that module on sys.path).
+        # Put the upstream `AdaLoc` dir on sys.path BEFORE unpickling so torch's
+        # Unpickler can resolve `AdaLoc.*` and `roberta_adaloc.*` class paths.
+        adaloc_pkg = BASELINE_PATH / "AdaLoc"
+        if adaloc_pkg.exists() and str(adaloc_pkg) not in sys.path:
+            sys.path.insert(0, str(adaloc_pkg))
+        if str(BASELINE_PATH) not in sys.path:
+            sys.path.insert(0, str(BASELINE_PATH))
+
         if self.checkpoint_path:
             ckpt_path = Path(self.checkpoint_path)
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"AdaLoc checkpoint not found: {ckpt_path}")
 
+            # Load to CPU first to avoid peaking GPU memory at unpickle time
+            # (the checkpoint is ~1.4 GB; on a tight GPU this caused OOM).
             self.sentence_head = torch.load(
-                ckpt_path, map_location=self.device, weights_only=False,
+                ckpt_path, map_location="cpu", weights_only=False,
             )
             self.sentence_head.to(self.device).eval()
 
-            # The checkpoint may already have roberta_tokenizer/roberta_detector
+            # The checkpoint pickled an older transformers tokenizer + config
+            # (lacking `split_special_tokens`, `_output_attentions` …). RoBERTa
+            # itself is a frozen public model (`roberta-large-openai-detector`),
+            # so we reload both from HF under the current transformers version
+            # and only keep the trained `sentence_head`.
+            self._load_roberta()
+            if hasattr(self.sentence_head, "roberta_detector"):
+                # release the old pickled model to free memory
+                try:
+                    del self.sentence_head.roberta_detector
+                except Exception:
+                    pass
             if hasattr(self.sentence_head, "roberta_tokenizer"):
-                self.tokenizer = self.sentence_head.roberta_tokenizer
-                self.roberta = self.sentence_head.roberta_detector
-            else:
-                self._load_roberta()
+                try:
+                    del self.sentence_head.roberta_tokenizer
+                except Exception:
+                    pass
         else:
             # No checkpoint — build from scratch (random head)
             self._load_roberta()

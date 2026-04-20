@@ -30,13 +30,13 @@ max_token_observed: 2048 # Maximum tokens to analyze (higher = more context)
 use_bfloat16: true # Use bfloat16 precision for efficiency
 
 # Device Configuration
-device:
-    split # Options:
-    # - "auto": Auto distribute each model across all GPUs
-    # - "split": Split models across GPUs (observer on cuda:0, performer on cuda:1)
-    # - "cpu": CPU only (very slow)
-    # - "cuda:0": Single GPU (requires ~14GB VRAM)
-    # - "0,1": Specific GPUs for auto distribution
+# Options:
+#   "auto"   — auto-distribute each model across all GPUs
+#   "split"  — observer on cuda:0, performer on cuda:1 (default)
+#   "cpu"    — CPU only (very slow)
+#   "cuda:0" — single GPU (requires ~14 GB VRAM)
+#   "0,1"    — specific GPUs for auto-distribution
+device: split
 # Performance Notes:
 # - Speed: 0.5-2s per text (depends on length and GPU)
 # - GPU: Required, ~14GB VRAM for both models

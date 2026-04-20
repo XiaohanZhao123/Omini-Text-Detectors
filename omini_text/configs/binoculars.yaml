@@ -14,15 +14,19 @@ performer_name: tiiuae/falcon-7b-instruct # Instruction-tuned variant
 # - Llama-2-7b + Llama-2-7b-chat: Alternative, requires HF token (14GB VRAM)
 
 # Detection Mode
-mode: low-fpr # Options: "low-fpr" (0.01% FPR), "accuracy" (balanced F1)
-
-# Thresholds (pre-calibrated on Falcon-7B):
-# - low-fpr: 0.8536 (optimized for very low false positive rate)
-# - accuracy: 0.9015 (optimized for F1-score)
-# threshold: 0.85  # Uncomment to override mode-based threshold
+# `accuracy` matches `baseline/binoculars/experiments/run.py` line 17 (the upstream
+# eval script that produces paper Table 3 numbers). `low-fpr` is the alternative
+# mode for low-false-positive operation. Threshold values are pre-calibrated.
+mode: accuracy # Options: "accuracy" (paper-exact, balanced F1, threshold 0.9015) or
+               #         "low-fpr" (threshold 0.8536, optimized for 0.01% FPR)
+# threshold: 0.85  # uncomment to override mode-based threshold
 
 # Model Settings
-max_token_observed: 2048 # Use Falcon-7B's full context length for better detection
+# `max_token_observed=512` matches upstream `run.py --tokens_seen 512` default;
+# the published thresholds (0.9015 / 0.8536) were calibrated at this length, so
+# raising it silently shifts the score distribution. Don't change unless you
+# also recalibrate the threshold.
+max_token_observed: 512
 use_bfloat16: true # Use bfloat16 precision for efficiency
 
 # Performance Notes:
