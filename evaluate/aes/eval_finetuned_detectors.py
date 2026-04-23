@@ -50,6 +50,15 @@ from transformers import AutoConfig, AutoModel, AutoTokenizer
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from evaluate.aes._metric_slices import (
+    ai_ratio_bucket_rows,
+    generator_key,
+    op_key,
+    slice_rows,
+    slice_rows_nested,
+    version_key,
+)
+
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "aes_finetuned_eval"
 
 
@@ -430,24 +439,52 @@ def compute_metrics(results, method):
             vm["human_f1"] = f1_score(yt, yp, pos_label=0, zero_division=0)
         metrics["by_version"][ver] = vm
 
-    # --- Per-generator breakdown ---
-    by_gen = defaultdict(list)
-    for r in valid:
-        gen = r.get("ai_model", "unknown")
-        by_gen[gen].append(r)
-
-    metrics["by_generator"] = {}
-    for gen in sorted(by_gen.keys()):
-        gr = by_gen[gen]
-        yt = [r["doc_label_gt"] for r in gr]
-        yp = [r["detection_doc_label"] for r in gr]
-        if len(set(yt)) < 2:
-            continue
-        metrics["by_generator"][gen] = {
+    # --- Per-slice doc metrics (schema: this harness's teammate-aligned keys) ---
+    def _doc_metrics_from_rows(rs):
+        yt = [r["doc_label_gt"] for r in rs]
+        yp = [r["detection_doc_label"] for r in rs]
+        ys = [r["detection_doc_score"] for r in rs]
+        out = {
             "accuracy": accuracy_score(yt, yp),
+            "mean_score": float(np.mean([s for s in ys if s is not None])) if ys else None,
+            "f1_macro": f1_score(yt, yp, average="macro", zero_division=0),
+            "ai_precision": precision_score(yt, yp, pos_label=1, zero_division=0),
+            "ai_recall": recall_score(yt, yp, pos_label=1, zero_division=0),
             "ai_f1": f1_score(yt, yp, pos_label=1, zero_division=0),
-            "n": len(gr),
+            "human_precision": precision_score(yt, yp, pos_label=0, zero_division=0),
+            "human_recall": recall_score(yt, yp, pos_label=0, zero_division=0),
+            "human_f1": f1_score(yt, yp, pos_label=0, zero_division=0),
+            "n": len(rs),
         }
+        if len(set(yt)) > 1:
+            ys_clean = [s for s in ys if s is not None]
+            if len(ys_clean) == len(yt):
+                out["auroc"] = roc_auc_score(yt, ys_clean)
+        return out
+
+    def _apply(slices):
+        return {k: _doc_metrics_from_rows(rs) for k, rs in slices.items()}
+
+    def _apply_nested(nested):
+        return {
+            k1: {k2: _doc_metrics_from_rows(rs) for k2, rs in inner.items()}
+            for k1, inner in nested.items()
+        }
+
+    # --- Per-generator / per-operation / nested cross-tabs ---
+    metrics["by_generator"] = _apply(slice_rows(valid, generator_key))
+    metrics["by_operation"] = _apply(slice_rows(valid, op_key))
+    metrics["by_version_and_generator"] = _apply_nested(
+        slice_rows_nested(valid, version_key, generator_key)
+    )
+    metrics["by_operation_and_generator"] = _apply_nested(
+        slice_rows_nested(valid, op_key, generator_key)
+    )
+    # eval_finetuned records rename the CSV column AI_token_ratio → ai_ratio_gt
+    # in load_data(); use that renamed key here.
+    bkt = ai_ratio_bucket_rows(valid, ratio_key="ai_ratio_gt")
+    if bkt:
+        metrics["by_ai_ratio_bucket"] = _apply(bkt)
 
     return metrics
 

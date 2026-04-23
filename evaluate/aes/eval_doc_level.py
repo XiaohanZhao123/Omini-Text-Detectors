@@ -31,7 +31,6 @@ import json
 import subprocess
 import sys
 import time
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -50,6 +49,15 @@ from sklearn.metrics import (
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+from evaluate.aes._metric_slices import (
+    ai_ratio_bucket_rows,
+    generator_key,
+    op_key,
+    slice_rows,
+    slice_rows_nested,
+    version_key,
+)
 
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "aes_doc_eval"
 
@@ -268,43 +276,55 @@ def _compute_group_metrics(y_true, y_pred, y_score):
     return metrics
 
 
+def _metrics_of(rows):
+    """Per-group metric bundle for this harness's schema."""
+    y_true = [p["detection_gt_label"] for p in rows]
+    y_pred = [p["detection_label"] for p in rows]
+    y_score = [p["detection_score_p_ai"] for p in rows]
+    return _compute_group_metrics(y_true, y_pred, y_score)
+
+
 def compute_all_metrics(predictions):
-    """Compute overall + sliced metrics from prediction dicts."""
+    """Compute overall + richly-sliced metrics from prediction dicts.
+
+    Returns a dict of named slices so teammates can request new cross-tabs
+    without a re-run:
+      - metrics_overall
+      - metrics_by_version            (sliced on `version` field)
+      - metrics_by_generator          (sliced on `ai_model` / `model_used`)
+      - metrics_by_operation          (sliced on `operation` field)
+      - metrics_by_version_and_generator    nested {version: {generator: m}}
+      - metrics_by_operation_and_generator  nested {operation: {generator: m}}
+      - metrics_by_ai_ratio_bucket    coarse AI_token_ratio buckets
+    """
     valid = [p for p in predictions if p.get("detection_error") is None]
+    overall = _metrics_of(valid)
 
-    y_true = [p["detection_gt_label"] for p in valid]
-    y_pred = [p["detection_label"] for p in valid]
-    y_score = [p["detection_score_p_ai"] for p in valid]
+    def _apply(slices):
+        return {k: _metrics_of(rs) for k, rs in slices.items()}
 
-    metrics_overall = _compute_group_metrics(y_true, y_pred, y_score)
+    def _apply_nested(nested):
+        return {
+            k1: {k2: _metrics_of(rs) for k2, rs in inner.items()}
+            for k1, inner in nested.items()
+        }
 
-    # By version
-    metrics_by_version = {}
-    by_ver = defaultdict(lambda: ([], [], []))
-    for p in valid:
-        v = p.get("version", "unknown")
-        by_ver[v][0].append(p["detection_gt_label"])
-        by_ver[v][1].append(p["detection_label"])
-        by_ver[v][2].append(p["detection_score_p_ai"])
-    for ver in sorted(by_ver):
-        yt, yp, ys = by_ver[ver]
-        metrics_by_version[ver] = _compute_group_metrics(yt, yp, ys)
-
-    # By operation
-    metrics_by_operation = {}
-    by_op = defaultdict(lambda: ([], [], []))
-    for p in valid:
-        op = p.get("operation", "unknown")
-        if pd.isna(op) or op in ("", "none", "nan"):
-            op = "none"
-        by_op[str(op)][0].append(p["detection_gt_label"])
-        by_op[str(op)][1].append(p["detection_label"])
-        by_op[str(op)][2].append(p["detection_score_p_ai"])
-    for op in sorted(by_op):
-        yt, yp, ys = by_op[op]
-        metrics_by_operation[op] = _compute_group_metrics(yt, yp, ys)
-
-    return metrics_overall, metrics_by_version, metrics_by_operation
+    return {
+        "metrics_overall": overall,
+        "metrics_by_version": _apply(slice_rows(valid, version_key)),
+        "metrics_by_generator": _apply(slice_rows(valid, generator_key)),
+        "metrics_by_operation": _apply(slice_rows(valid, op_key)),
+        "metrics_by_version_and_generator": _apply_nested(
+            slice_rows_nested(valid, version_key, generator_key)
+        ),
+        "metrics_by_operation_and_generator": _apply_nested(
+            slice_rows_nested(valid, op_key, generator_key)
+        ),
+        # eval_doc_level rows carry the raw CSV column name `AI_token_ratio`.
+        "metrics_by_ai_ratio_bucket": _apply(
+            ai_ratio_bucket_rows(valid, ratio_key="AI_token_ratio")
+        ),
+    }
 
 
 # ============================================================================
@@ -313,11 +333,17 @@ def compute_all_metrics(predictions):
 
 def build_summary(
     method, dataset_name, field, model_short, csv_path, split,
-    config, metrics_overall, metrics_by_version, metrics_by_operation,
-    runtime, n_errors, git_commit, device,
+    config, metrics, runtime, n_errors, git_commit, device,
 ):
-    """Build the summary.json structure matching teammate's format."""
-    return {
+    """Build the summary.json structure matching teammate's format.
+
+    `metrics` is the full dict returned by compute_all_metrics (keys
+    metrics_overall / metrics_by_version / metrics_by_generator /
+    metrics_by_operation / metrics_by_version_and_generator /
+    metrics_by_operation_and_generator / metrics_by_ai_ratio_bucket).
+    """
+    overall = metrics.get("metrics_overall", {})
+    summary = {
         "detector": method,
         "dataset": {
             "name": dataset_name,
@@ -325,9 +351,9 @@ def build_summary(
             "model_short": model_short,
             "csv_path": str(csv_path),
             "split": split,
-            "n_samples": metrics_overall.get("n", 0),
-            "n_ai_positive": metrics_overall.get("n_pos_ai", 0),
-            "n_human_negative": metrics_overall.get("n_neg_human", 0),
+            "n_samples": overall.get("n", 0),
+            "n_ai_positive": overall.get("n_pos_ai", 0),
+            "n_human_negative": overall.get("n_neg_human", 0),
         },
         "protocol": {
             "pipeline_call": f"pipeline('ai-text-detection', model='{method}', device='{device}')",
@@ -336,13 +362,13 @@ def build_summary(
             "gt_label_rule": "1 iff AI_token_ratio > 0 (any AI content present)",
             "input_field": "text_clean",
         },
-        "metrics_overall": metrics_overall,
-        "metrics_by_version": metrics_by_version,
-        "metrics_by_operation": metrics_by_operation,
         "runtime": runtime,
         "errors": {"n_detection_errors": n_errors},
         "git_commit": git_commit,
     }
+    # Stuff the metric cross-tabs at the top level alongside metrics_overall
+    summary.update(metrics)
+    return summary
 
 
 def build_run_config(
@@ -470,10 +496,11 @@ def main():
                     method, model_df, args.device,
                 )
 
-                # Compute metrics
-                metrics_overall, metrics_by_version, metrics_by_operation = (
-                    compute_all_metrics(predictions)
-                )
+                # Compute metrics (includes overall, by_version, by_generator,
+                # by_operation, by_version_and_generator,
+                # by_operation_and_generator, by_ai_ratio_bucket)
+                metrics = compute_all_metrics(predictions)
+                metrics_overall = metrics["metrics_overall"]
 
                 # Print summary
                 acc = metrics_overall.get("accuracy", 0)
@@ -501,9 +528,7 @@ def main():
                     csv_path=csv_path,
                     split=args.split,
                     config=config,
-                    metrics_overall=metrics_overall,
-                    metrics_by_version=metrics_by_version,
-                    metrics_by_operation=metrics_by_operation,
+                    metrics=metrics,
                     runtime=runtime,
                     n_errors=n_errors,
                     git_commit=git_commit,
