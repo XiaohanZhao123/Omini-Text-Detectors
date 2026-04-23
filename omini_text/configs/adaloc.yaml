@@ -7,10 +7,13 @@ model: adaloc
 
 # Model Configuration
 roberta_model: roberta-large-openai-detector  # Base RoBERTa detector for feature extraction
-checkpoint_path: null                          # Path to trained AdaLoc sentence head (.pkl)
+# Official checkpoint downloaded from https://drive.google.com/drive/folders/1D8qYcVoYgwNG7IzadF01W3eyPiuPRnY6
+# (trained on GoodNews 10K articles with gpt2-xl generator, 3 epochs, lr=1e-5, batch=16, window=3)
+checkpoint_path: checkpoints/adaloc/logs/adaloc_goodnews/epoch-best.pkl
 hidden_size: 1024                              # RoBERTa-large hidden size
 num_labels: 3                                  # Sliding window output size (= window_size)
 dropout: 0.1
+cache_dir: cache/hub                           # HF cache (symlinked to /datadrive/xiaohan/Omini-Text/cache/hub)
 
 # Sliding window parameters
 window_size: 3    # Number of sentences per window

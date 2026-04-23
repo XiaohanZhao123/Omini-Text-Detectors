@@ -26,6 +26,14 @@ from omini_text.detectors import BaseDetector
 
 BASELINE_PATH = Path(__file__).resolve().parent.parent.parent / "baseline" / "mgt-localization"
 
+# Ensure the AdaLoc module is importable before any torch.load() call, since
+# the official checkpoint (epoch-best.pkl) was saved via `torch.save(model, ...)`
+# (full-model pickle) and the unpickler needs to resolve the `RobertaSentenceHead`
+# class from `AdaLoc.roberta_adaloc`.
+_ADALOC_MODULE_PATH = BASELINE_PATH / "AdaLoc"
+if _ADALOC_MODULE_PATH.exists() and str(BASELINE_PATH) not in sys.path:
+    sys.path.insert(0, str(BASELINE_PATH))
+
 
 class AdaLocDetector(BaseDetector):
     """
@@ -67,17 +75,50 @@ class AdaLocDetector(BaseDetector):
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"AdaLoc checkpoint not found: {ckpt_path}")
 
-            self.sentence_head = torch.load(
-                ckpt_path, map_location=self.device, weights_only=False,
+            # The official checkpoint was saved via `torch.save(model, ...)`
+            # (full-object pickle) in March 2024 with transformers ~4.36.
+            # Both the pickled tokenizer and pickled RoBERTa backbone
+            # reference attributes (`split_special_tokens`,
+            # `attn_implementation`, …) that do not exist on the 4.50-era
+            # classes used today. Only the learned parts of the checkpoint
+            # are the `dense` and `out_proj` adapter layers (Linear 1024x1024
+            # and Linear 1024x3); the RoBERTa backbone itself is frozen at
+            # `roberta-large-openai-detector` and the tokenizer is stock.
+            #
+            # So: load the pickle only long enough to extract the adapter
+            # weights, then rebuild everything fresh against current HF.
+            pickled = torch.load(
+                ckpt_path, map_location="cpu", weights_only=False,
             )
-            self.sentence_head.to(self.device).eval()
+            adapter_state = {
+                "dense.weight": pickled.dense.weight.detach().clone(),
+                "dense.bias": pickled.dense.bias.detach().clone(),
+                "out_proj.weight": pickled.out_proj.weight.detach().clone(),
+                "out_proj.bias": pickled.out_proj.bias.detach().clone(),
+            }
+            # Infer head dims from the checkpoint so we don't rely on config
+            self.hidden_size = pickled.dense.in_features
+            self.num_labels = pickled.out_proj.out_features
+            del pickled  # drop the broken pickled roberta + tokenizer
 
-            # The checkpoint may already have roberta_tokenizer/roberta_detector
-            if hasattr(self.sentence_head, "roberta_tokenizer"):
-                self.tokenizer = self.sentence_head.roberta_tokenizer
-                self.roberta = self.sentence_head.roberta_detector
-            else:
-                self._load_roberta()
+            self._load_roberta()
+            self._build_head()
+            missing, unexpected = self.sentence_head.load_state_dict(
+                adapter_state, strict=False,
+            )
+            if missing:
+                # Guard against silent random-init: if the head class ever
+                # renames `dense` / `out_proj`, our 4-key state dict will
+                # land in `missing` and the detector would run with random
+                # weights without any warning.
+                raise RuntimeError(
+                    f"[AdaLoc] adapter weights failed to load "
+                    f"(key name mismatch with RobertaSentenceHead?): "
+                    f"missing={missing}"
+                )
+            if unexpected:
+                print(f"[AdaLoc] unexpected adapter keys: {unexpected}")
+            self.sentence_head.to(self.device).eval()
         else:
             # No checkpoint — build from scratch (random head)
             self._load_roberta()
