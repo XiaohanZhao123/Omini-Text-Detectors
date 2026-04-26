@@ -111,10 +111,11 @@ def _extract_model(stem: str) -> str:
     """Extract a short model identifier from the CSV filename.
 
     Examples:
-        abstracts_v0_v8_spans_gpt-5.4-2026-03-05  -> gpt-5.4
+        abstracts_v0_v8_spans_gpt-5.4-2026-03-05   -> gpt-5.4
         essays_v0_v8_spans_gpt-5.4-nano-2026-03-17 -> gpt-5.4-nano
         news_v0_v8_spans_gemini-2.5-flash          -> gemini-2.5-flash
-        gove_report_summries_parahLevel_ai          -> unknown
+        news_v0_v8_spans_qwen3-8b                  -> qwen3-8b
+        gove_report_summries_parahLevel_ai         -> unknown
     """
     stem_lower = stem.lower()
     if "gpt-5.4-nano" in stem_lower:
@@ -123,6 +124,8 @@ def _extract_model(stem: str) -> str:
         return "gpt-5.4"
     elif "gemini-2.5-flash" in stem_lower:
         return "gemini-2.5-flash"
+    elif "qwen3-8b" in stem_lower:
+        return "qwen3-8b"
     else:
         return "unknown"
 
