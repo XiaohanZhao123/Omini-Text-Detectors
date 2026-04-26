@@ -3,7 +3,8 @@
 # Paper: https://arxiv.org/abs/2310.08903
 # GitHub: https://github.com/Jihuai-wpy/SeqXGPT
 #
-# Achieves 95.6% word accuracy with paper's exact models (gpt2-xl, gpt-neo-2.7B, gpt-j-6B, llama-7B)
+# Paper's evaluation is sentence-level (Tables 1-5); paper does NOT report per-word accuracy.
+# Uses 4 LMs (gpt2-xl, gpt-neo-2.7B, gpt-j-6B, llama-7B) as perplexity feature extractors.
 # Requires ~43GB VRAM total - use feature_devices to distribute across GPUs
 
 model: seqxgpt
@@ -16,10 +17,10 @@ classifier_type: transformer
 # Path to trained classifier weights
 # Supports:
 #   - Local path: /path/to/seqxgpt_transformer.pt
-#   - HuggingFace Hub: zcahjl3/seqxgpt-detector (auto-downloads seqxgpt_transformer.pt)
-#   - HuggingFace Hub with filename: zcahjl3/seqxgpt-detector/seqxgpt_transformer.pt
+#   - HuggingFace Hub: zcahjl3/seqxgpt-detector (our HAT-Bench fine-tune — NOT paper-original)
+#   - The paper authors (Jihuai-wpy/SeqXGPT) did not publicly release trained weights.
 # Set to null for untrained model (unreliable predictions)
-checkpoint_path: zcahjl3/seqxgpt-detector
+checkpoint_path: baseline/seqxgpt/data/seqxgpt_transformer.pt  # Local SeqXGPT-recipe weights (paper protocol; same as 2026-04-23 smoke).
 
 # Feature Extraction Models
 # These LLMs are used to extract log-probability features
@@ -47,10 +48,16 @@ device: auto
 # Order matches feature_models list above
 # Uncomment to distribute across GPUs:
 feature_devices:
-  - cuda:3  # gpt2-xl (~6GB)
-  - cuda:4  # gpt-neo-2.7b (~11GB)
-  - cuda:5  # gpt-j-6b (~12GB)
-  - cuda:6  # llama-7b (~14GB)
+  - cuda:5  # gpt2-xl     (fp32, ~6GB)  — partner; tight (~2GB activation budget)
+  - cuda:6  # gpt-neo-2.7b (8bit, ~3.5GB) — partner
+  - cuda:0  # gpt-j-6b    (8bit, ~7GB)  — main
+  - cuda:0  # llama-7b    (8bit, ~7GB)  — main
+# Spread: only the two heavy 8bit models stay on cuda:0 (~14GB → 10GB headroom).
+# gpt2-xl fp32 + gpt-neo-2.7b 8bit go to partner GPUs cuda:5/6.
+# The 18-day Qwen2.5-32B lm_eval (PID 1347916, user `chien`) holds ~16GB on
+# cuda:1-6 leaving ~8GB free — gpt2-xl fp32 activations may OOM on long texts.
+# Lower seq_len here if needed. Run with
+# PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True for defragmentation.
 
 # Model Parameters
 # Maximum number of words per document (paper default: 1024)
@@ -75,7 +82,7 @@ threshold: 0.5
 # =============================================================================
 # Training Instructions
 # =============================================================================
-# Retrained checkpoint at zcahjl3/seqxgpt-detector (95.6% word acc on SeqXGPT-Bench).
+# Our HAT-Bench fine-tune lives at zcahjl3/seqxgpt-detector (see seqxgpt-finetuned.yaml).
 # To retrain from scratch:
 #
 # 1. Prepare training data in SeqXGPT format:

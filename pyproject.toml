@@ -36,8 +36,12 @@ dependencies = [
     "protobuf",
     "sentencepiece",
     "tensorboard",
-    "openai",     # required by baseline/seqxgpt/.../backend_utils.py (module-level import)
-    "msgpack",    # required by baseline/seqxgpt/.../backend_utils.py
+    "openai", # required by baseline/seqxgpt/.../backend_utils.py (module-level import)
+    "anthropic>=0.97.0", # used by ClaudeSentenceDetector (LLM judge)
+    "google-genai", # used by GeminiSentenceDetector (LLM judge)
+    "python-dotenv", # for loading .env API keys
+    "msgpack", # required by baseline/seqxgpt/.../backend_utils.py
+    "setuptools<81",  # need pkg_resources (removed in setuptools 81+); fastNLP imports it
 ]
 
 [project.optional-dependencies]
