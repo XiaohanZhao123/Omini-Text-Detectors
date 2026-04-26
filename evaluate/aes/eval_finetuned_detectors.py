@@ -135,7 +135,14 @@ def load_model(method, checkpoint_path, device):
     """Load a trained checkpoint and return (model, tokenizer, config_dict)."""
     ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     cfg = ckpt['config']
-    model_name = cfg['model_name']
+    # The canonical key is `model_name` (written by train_token_detector.py) but
+    # an earlier simplified trainer wrote `model` instead. Accept either.
+    model_name = cfg.get('model_name') or cfg.get('model')
+    if not model_name:
+        raise KeyError(
+            "Checkpoint config has neither `model_name` nor `model` key; "
+            "cannot determine backbone."
+        )
 
     tok_kwargs = {}
     if any(k in model_name.lower() for k in ("roberta", "gpt")):
