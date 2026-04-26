@@ -47,10 +47,10 @@ device: auto
 # Order matches feature_models list above
 # Uncomment to distribute across GPUs:
 feature_devices:
-  - cuda:3  # gpt2-xl (~6GB)
-  - cuda:4  # gpt-neo-2.7b (~11GB)
-  - cuda:5  # gpt-j-6b (~12GB)
-  - cuda:6  # llama-7b (~14GB)
+  - cuda:0  # gpt2-xl (~6GB)
+  - cuda:1  # gpt-neo-2.7b (~11GB)
+  - cuda:2  # gpt-j-6b (~12GB)
+  - cuda:3  # llama-7b (~14GB)
 
 # Model Parameters
 # Maximum number of words per document (paper default: 1024)
