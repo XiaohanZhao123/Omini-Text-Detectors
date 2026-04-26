@@ -20,7 +20,8 @@ classifier_type: transformer
 #   - HuggingFace Hub: zcahjl3/seqxgpt-detector (our HAT-Bench fine-tune — NOT paper-original)
 #   - The paper authors (Jihuai-wpy/SeqXGPT) did not publicly release trained weights.
 # Set to null for untrained model (unreliable predictions)
-checkpoint_path: baseline/seqxgpt/data/seqxgpt_transformer.pt  # Local SeqXGPT-recipe weights (paper protocol; same as 2026-04-23 smoke).
+checkpoint_path: zcahjl3/seqxgpt-detector  # Reproduced SeqXGPT-recipe weights on HF Hub (paper protocol; auto-downloaded).
+                                           # Local fallback: baseline/seqxgpt/data/seqxgpt_transformer.pt (gitignored — not in the repo).
 
 # Feature Extraction Models
 # These LLMs are used to extract log-probability features
