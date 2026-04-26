@@ -42,6 +42,7 @@ def pipeline(task: str, model: str, **kwargs) -> "DetectorPipeline":
         "ood-llm-detect": "omini_text.detectors.ood_llm_detector.OODLLMDetector",
         "gigacheck": "omini_text.detectors.gigacheck_detector.GigacheckDetector",
         "seqxgpt": "omini_text.detectors.seqxgpt_detector.SeqXGPTDetector",
+        "seqxgpt-sondos": "omini_text.detectors.seqxgpt_detector.SeqXGPTDetector",
         "roft-boundary": "omini_text.detectors.roft_boundary_detector.RoFTBoundaryDetector",
         "damasha": "omini_text.detectors.damasha_detector.DAMASHADetector",
         "mgtd": "omini_text.detectors.mgtd_detector.MGTDDetector",
