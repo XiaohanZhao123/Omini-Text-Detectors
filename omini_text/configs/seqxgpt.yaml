@@ -3,7 +3,9 @@
 # Paper: https://arxiv.org/abs/2310.08903
 # GitHub: https://github.com/Jihuai-wpy/SeqXGPT
 #
-# Achieves 95.6% word accuracy with paper's exact models (gpt2-xl, gpt-neo-2.7B, gpt-j-6B, llama-7B)
+# Paper evaluation is sentence-level; this wrapper exposes word-level BMES
+# predictions and derived intervals for downstream sentence/span evaluation.
+# Uses the paper's feature LMs: gpt2-xl, gpt-neo-2.7B, gpt-j-6B, llama-7B.
 # Requires ~43GB VRAM total - use feature_devices to distribute across GPUs
 
 model: seqxgpt
@@ -16,10 +18,10 @@ classifier_type: transformer
 # Path to trained classifier weights
 # Supports:
 #   - Local path: /path/to/seqxgpt_transformer.pt
-#   - HuggingFace Hub: zcahjl3/seqxgpt-detector (auto-downloads seqxgpt_transformer.pt)
-#   - HuggingFace Hub with filename: zcahjl3/seqxgpt-detector/seqxgpt_transformer.pt
-# Set to null for untrained model (unreliable predictions)
-checkpoint_path: zcahjl3/seqxgpt-detector
+#   - Local path: <LOCAL_SEQXGPT_CHECKPOINT>
+#   - Hugging Face Hub repo, if you publish one separately
+# Set to null unless you provide a trained checkpoint at runtime.
+checkpoint_path: null
 
 # Feature Extraction Models
 # These LLMs are used to extract log-probability features
@@ -75,7 +77,7 @@ threshold: 0.5
 # =============================================================================
 # Training Instructions
 # =============================================================================
-# Retrained checkpoint at zcahjl3/seqxgpt-detector (95.6% word acc on SeqXGPT-Bench).
+# Provide a trained checkpoint through `checkpoint_path` before inference.
 # To retrain from scratch:
 #
 # 1. Prepare training data in SeqXGPT format:

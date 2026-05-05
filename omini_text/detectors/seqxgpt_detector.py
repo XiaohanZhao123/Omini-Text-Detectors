@@ -157,7 +157,7 @@ class SeqXGPTDetector(BaseDetector):
     SeqXGPT detector using the original codebase.
 
     Config keys:
-        checkpoint_path: str -- path or HF repo (e.g. "zcahjl3/seqxgpt-detector")
+        checkpoint_path: str -- local path or HF repo for a compatible trained checkpoint
         feature_models: list -- e.g. ["gpt2-xl", "gpt-neo-2.7b", "gpt-j-6b", "llama-7b"]
         feature_devices: list -- e.g. ["cuda:3", "cuda:4", "cuda:5", "cuda:6"]
         device: str -- device for classifier (default: "auto")

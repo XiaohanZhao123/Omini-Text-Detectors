@@ -1,5 +1,5 @@
 """
-Claude LLM-as-Judge detector for AI text classification.
+Claude language-model detector for AI text classification.
 
 Uses the Anthropic API to classify text as human-written or AI-generated.
 Supports multiple variants with different models and thinking modes.
@@ -44,7 +44,7 @@ class ClaudeDetector(BaseDetector):
     """
     Claude-based AI text detector using Anthropic API.
 
-    Uses Claude models as an LLM judge to classify text as human or AI-generated.
+    Uses Claude models as language-model detectors to classify text as human or AI-generated.
     Supports extended thinking for more thorough analysis.
     """
 

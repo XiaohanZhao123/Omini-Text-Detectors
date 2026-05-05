@@ -13,7 +13,7 @@ checkpoint_path: checkpoints/adaloc/logs/adaloc_goodnews/epoch-best.pkl
 hidden_size: 1024                              # RoBERTa-large hidden size
 num_labels: 3                                  # Sliding window output size (= window_size)
 dropout: 0.1
-cache_dir: cache/hub                           # HF cache (symlinked to /datadrive/xiaohan/Omini-Text/cache/hub)
+cache_dir: cache/hub                           # Local Hugging Face cache directory
 
 # Sliding window parameters
 window_size: 3    # Number of sentences per window

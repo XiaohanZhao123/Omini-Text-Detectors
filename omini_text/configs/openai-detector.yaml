@@ -1,17 +1,16 @@
 # OpenAI GPT language-model detector
-# Legacy config name kept for backward compatibility.
-# Uses OpenAI API to classify text as human-written or AI-generated
+# Uses OpenAI API to classify text as human-written or AI-generated.
 # Requires: OPENAI_API_KEY in .env file
 #
 # Supported variants:
-#   gpt52-reason-none   — GPT-5.2, no reasoning (fastest, cheapest)
+#   gpt52-reason-none   — GPT-5.2, no reasoning
 #   gpt52-reason-low    — GPT-5.2, low reasoning effort
 #   gpt52-reason-medium — GPT-5.2, medium reasoning effort
 #   gpt52-conf-none     — GPT-5.2, returns confidence score, no reasoning
 #   gpt52-cot-none      — GPT-5.2, chain-of-thought prompt, no reasoning
 #   gpt52-cot-low       — GPT-5.2, chain-of-thought prompt, low reasoning
 
-model: openai-judge
+model: openai-detector
 
 # Variant Selection
 variant: gpt52-reason-none
@@ -21,7 +20,6 @@ max_retries: 3
 
 # Usage:
 # from omini_text import pipeline
-# Prefer the non-legacy alias in new code:
 # pipe = pipeline("ai-text-detection", model="openai-detector")
 # result = pipe("Your text here")
 #

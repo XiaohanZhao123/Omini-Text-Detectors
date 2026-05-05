@@ -1,4 +1,4 @@
-# Claude LLM-as-Judge Detector
+# Claude language-model detector
 # Uses Anthropic API to classify text as human-written or AI-generated
 # Requires: ANTHROPIC_API_KEY in .env file
 #
