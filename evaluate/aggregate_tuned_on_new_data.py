@@ -290,7 +290,7 @@ def safe_auroc(labels, scores):
         return None
 
 
-def aggregate_cell(method: str, level: str, cell_dir: Path, repo_root: Path = Path('/home/qid/xiaohan/Omini-Text-Detectors')):
+def aggregate_cell(method: str, level: str, cell_dir: Path, repo_root: Path = Path(__file__).resolve().parent.parent):
     """Process one cell. Returns list of row dicts grouped by (gen, ver, op)."""
     cell_name = cell_dir.name
     domain, split, ablation_label, gen_override = parse_cell(cell_name)
