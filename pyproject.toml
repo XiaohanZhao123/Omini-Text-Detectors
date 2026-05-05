@@ -36,6 +36,8 @@ dependencies = [
     "openai",     # required by baseline/seqxgpt/.../backend_utils.py (module-level import)
     "msgpack",    # required by baseline/seqxgpt/.../backend_utils.py
     "setuptools<80",
+    "datasets",   # OpAI-Bench loader pulls from HuggingFace Hub
+    "hydra-core", # NeurIPS release entry point uses Hydra config
 ]
 
 [project.optional-dependencies]

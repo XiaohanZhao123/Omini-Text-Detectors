@@ -110,13 +110,14 @@ class DNADetectLLMDetector(BaseDetector):
         print(f"   Device: {device}\n")
 
         # Initialize DetectLLM
+        # Note: upstream DetectLLM picks devices internally (DEVICE_1/2);
+        # it does NOT accept a `device=` kwarg.
         self.detector = DetectLLM(
             observer_name_or_path=observer_name,
             performer_name_or_path=performer_name,
             use_bfloat16=use_bfloat16,
             max_token_observed=max_token_observed,
             mode=mode,
-            device=device,
         )
 
         # Allow custom threshold override

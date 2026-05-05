@@ -12,6 +12,13 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
+# fastNLP 1.0.1 imports `DeepSpeedOptimizer` from deepspeed, which was
+# renamed to `DeepSpeedOptimizerCallable` in deepspeed >= 0.16. Alias
+# before any fastNLP import fires (model.py drags fastNLP in transitively).
+import deepspeed as _ds
+if not hasattr(_ds, "DeepSpeedOptimizer") and hasattr(_ds, "DeepSpeedOptimizerCallable"):
+    _ds.DeepSpeedOptimizer = _ds.DeepSpeedOptimizerCallable
+
 import numpy as np
 import torch
 import transformers

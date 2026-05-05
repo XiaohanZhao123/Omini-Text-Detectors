@@ -101,8 +101,36 @@ class GenAISentenceDetector(BaseDetector):
         )
 
         if self.checkpoint_path:
-            state_dict = torch.load(self.checkpoint_path, map_location=self.device)
-            self.model.load_state_dict(state_dict)
+            ckpt = torch.load(self.checkpoint_path, map_location=self.device,
+                              weights_only=False)
+            # Training script wraps weights as {"model_state_dict", "config",
+            # "metrics"}; raw torch.save(state_dict) puts tensors at the top.
+            if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+                state_dict = ckpt["model_state_dict"]
+            else:
+                state_dict = ckpt
+            # The training run used a PEFT/LoRA wrapper, so saved keys look like
+            # `deberta.base_model.model.<...>.base_layer.weight` and include
+            # `lora_A.weight / lora_B.weight` adapter tensors. Inference here
+            # uses the plain DeBERTa backbone, so:
+            #   - strip the PEFT prefix `base_model.model.`
+            #   - strip the per-layer `base_layer.` indirection
+            #   - drop the LoRA delta tensors (we use the frozen base only)
+            remapped = {}
+            for k, v in state_dict.items():
+                if "lora_A" in k or "lora_B" in k or "modules_to_save" in k:
+                    continue
+                nk = k.replace(".base_model.model.", ".") \
+                      .replace(".base_layer.", ".")
+                remapped[nk] = v
+            missing, unexpected = self.model.load_state_dict(remapped,
+                                                              strict=False)
+            if missing:
+                print(f"[GenAI-Sentence] {len(missing)} keys missing "
+                      f"(non-fatal): {missing[:3]}{'...' if len(missing) > 3 else ''}")
+            if unexpected:
+                print(f"[GenAI-Sentence] {len(unexpected)} unexpected keys "
+                      f"skipped: {unexpected[:3]}{'...' if len(unexpected) > 3 else ''}")
 
         self.model.to(self.device)
         self.model.eval()
