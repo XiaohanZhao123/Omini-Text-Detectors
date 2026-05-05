@@ -45,7 +45,11 @@ venv/
 
 # Project-specific
 .claude/
+.codex/
 .serena/
+
+# OpenSpec scaffolding — kept local, not pushed for this repo
+openspec/
 
 # Logs
 *.log
@@ -66,3 +70,6 @@ CLAUDE.md
 
 # dataset, currently not public
 data/
+
+# Stray dataset checkpoint CSVs left in repo root (data products, not source)
+/*_checkpoint.csv
