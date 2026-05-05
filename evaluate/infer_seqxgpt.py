@@ -14,6 +14,13 @@ import argparse, json, sys, time
 from pathlib import Path
 import numpy as np
 import torch
+
+# fastNLP 1.0.1 imports `DeepSpeedOptimizer` from deepspeed, which was renamed
+# to `DeepSpeedOptimizerCallable` in deepspeed >= 0.16. Alias before fastNLP loads.
+import deepspeed as _ds
+if not hasattr(_ds, "DeepSpeedOptimizer") and hasattr(_ds, "DeepSpeedOptimizerCallable"):
+    _ds.DeepSpeedOptimizer = _ds.DeepSpeedOptimizerCallable
+
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent

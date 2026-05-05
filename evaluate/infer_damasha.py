@@ -42,17 +42,32 @@ def sent_labels_from_tok(words, sent_labels, tok_labels):
     return sent_labels
 
 
+def _safe_list_field(v):
+    """Parse a list-valued column robustly. Handles NaN/float/None."""
+    if isinstance(v, str):
+        try:
+            out = ast.literal_eval(v)
+            return out if isinstance(out, list) else []
+        except Exception:
+            return []
+    if isinstance(v, list):
+        return v
+    return []  # NaN, None, float, etc.
+
+
 def load_test_rows(csv_paths, split="test"):
     rows = []
     for csv_path in csv_paths:
-        df = pd.read_csv(csv_path)
-        df = df[df["split"].str.lower().str.strip() == split]
+        df = pd.read_csv(csv_path, low_memory=False)
+        df = df[df["split"].astype(str).str.lower().str.strip() == split]
         for _, r in df.iterrows():
             try:
-                words = ast.literal_eval(r["tokens"]) if isinstance(r["tokens"], str) else r["tokens"]
-                tlabs = ast.literal_eval(r["tok_labels"]) if isinstance(r["tok_labels"], str) else r["tok_labels"]
-                sents = ast.literal_eval(r["sentences"]) if isinstance(r["sentences"], str) else (r["sentences"] or [])
-                slabs = ast.literal_eval(r["sent_labels"]) if isinstance(r["sent_labels"], str) else (r["sent_labels"] or [])
+                words_raw = _safe_list_field(r["tokens"])
+                # Coerce token elements to str (some rows have int/None mixed in)
+                words = [str(w) for w in words_raw if w is not None]
+                tlabs = _safe_list_field(r["tok_labels"])
+                sents = _safe_list_field(r["sentences"])
+                slabs = _safe_list_field(r["sent_labels"])
             except Exception:
                 continue
             if len(words) != len(tlabs) or not words:

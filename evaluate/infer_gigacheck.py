@@ -29,20 +29,34 @@ from gigacheck.model.mistral_ai_detector import MistralAIDetectorForSequenceClas
 from peft import PeftModel  # noqa: E402
 
 
+def _safe_list(v):
+    if isinstance(v, str):
+        try:
+            out = ast.literal_eval(v)
+            return out if isinstance(out, list) else []
+        except Exception:
+            return []
+    if isinstance(v, list):
+        return v
+    return []
+
+
 def load_test_rows(csv_paths, split="test"):
     rows = []
     for csv_path in csv_paths:
-        df = pd.read_csv(csv_path)
-        df = df[df["split"].str.lower().str.strip() == split]
+        df = pd.read_csv(csv_path, low_memory=False)
+        df = df[df["split"].astype(str).str.lower().str.strip() == split]
         for _, r in df.iterrows():
             try:
-                words = ast.literal_eval(r["tokens"]) if isinstance(r["tokens"], str) else r["tokens"]
-                tlabs = ast.literal_eval(r["tok_labels"]) if isinstance(r["tok_labels"], str) else r["tok_labels"]
-                sents = ast.literal_eval(r["sentences"]) if isinstance(r["sentences"], str) else (r["sentences"] or [])
-                slabs = ast.literal_eval(r["sent_labels"]) if isinstance(r["sent_labels"], str) else (r["sent_labels"] or [])
+                words_raw = _safe_list(r["tokens"])
+                words = [str(w) for w in words_raw if w is not None]
+                tlabs = _safe_list(r["tok_labels"])
+                sents = _safe_list(r["sentences"])
+                slabs = _safe_list(r["sent_labels"])
             except Exception:
                 continue
-            text = str(r.get("text_clean", "")).strip()
+            text_raw = r.get("text_clean", "")
+            text = str(text_raw).strip() if isinstance(text_raw, str) else ""
             if not text or len(words) != len(tlabs):
                 continue
             rows.append({

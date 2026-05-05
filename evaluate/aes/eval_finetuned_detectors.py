@@ -175,12 +175,18 @@ def load_data(csv_path, split=None, max_samples=None):
         except (ValueError, SyntaxError):
             tok_labels = []
         try:
-            tokens = ast.literal_eval(str(row["tokens"]))
+            tokens_raw = ast.literal_eval(str(row["tokens"]))
+            tokens = [str(t) for t in tokens_raw if t is not None]
         except (ValueError, SyntaxError):
-            tokens = row["text_clean"].split() if pd.notna(row.get("text_clean")) else []
+            tc = row.get("text_clean")
+            tokens = str(tc).split() if pd.notna(tc) else []
 
         ai_ratio = sum(tok_labels) / len(tok_labels) if tok_labels else 0
         doc_label = 1 if ai_ratio > 0 else 0
+
+        text = row.get("text_clean")
+        if not isinstance(text, str) or not text:
+            text = " ".join(tokens)
 
         records.append({
             "essay_id": str(row["essay_id"]),
@@ -190,7 +196,7 @@ def load_data(csv_path, split=None, max_samples=None):
             "operation": str(row.get("operation", "")),
             "ai_ratio_gt": float(row.get("AI_token_ratio", ai_ratio)),
             "doc_label_gt": doc_label,
-            "text": row.get("text_clean", " ".join(tokens)),
+            "text": text,
             "tokens": tokens,
             "tok_labels": tok_labels,
         })

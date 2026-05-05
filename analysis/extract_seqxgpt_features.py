@@ -62,11 +62,12 @@ def doc_id(row) -> str:
     return hashlib.md5(key.encode()).hexdigest()[:16]
 
 
-def load_rows(domains, split):
+def load_rows(domains, split, csv_dir=None):
     """Load (doc_id, text_clean, words, tok_labels, meta) for each row."""
+    csv_root = Path(csv_dir) if csv_dir else PREPARED_CSV_DIR
     rows = []
     for dom in domains:
-        csv = PREPARED_CSV_DIR / f"{dom}.csv"
+        csv = csv_root / f"{dom}.csv"
         if not csv.exists():
             continue
         df = pd.read_csv(csv)
@@ -159,6 +160,8 @@ def main():
     ap.add_argument("--domains", nargs="+",
                     default=["essay", "abstract", "news", "report"])
     ap.add_argument("--out-dir", default=str(OUT_DIR))
+    ap.add_argument("--csv-dir", default=str(PREPARED_CSV_DIR),
+                    help="Directory containing <domain>.csv prepared files")
     ap.add_argument("--cache-dir",
                     default="/datadrive/xiaohan/Omini-Text/cache")
     ap.add_argument("--flush-every", type=int, default=50,
@@ -191,7 +194,7 @@ def main():
     # 1. Materialize all rows + write meta once per split
     split_rows = {}
     for split in args.splits:
-        rows = load_rows(args.domains, split)
+        rows = load_rows(args.domains, split, csv_dir=args.csv_dir)
         if args.max_docs_per_split:
             rows = rows[:args.max_docs_per_split]
         # Write meta with FULL rows so the output stays consistent across slices
