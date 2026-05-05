@@ -13,6 +13,7 @@ from utils.config import GLCLiCModelConfig
 from transformers import AutoTokenizer
 from transformers import AutoModel
 from torch.optim import AdamW
+from torch.optim import lr_scheduler  # released-code bug fix: used but not imported
 
 
 

@@ -11,8 +11,10 @@ GitHub: https://github.com/TristoneJiang/SenDetEX
 
 Requires:
     - A trained SenDetEX checkpoint (.pt)
-    - A proxy LM for embeddings (default: bert-base-uncased)
-    - A causal LM for sentence regeneration (default: gpt2)
+    - A proxy LM whose embedding layer matches what training used
+      (default: huggyllama/llama-7b, used both as proxy and regen model,
+       following the paper's FTPM setup but with a vanilla LLaMA instead
+       of the LoRA fine-tuned variant).
 """
 
 import re
@@ -23,7 +25,7 @@ from typing import Dict, List, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from omini_text.detectors import BaseDetector
 
@@ -46,12 +48,20 @@ class SenDetEXDetector(BaseDetector):
     def __init__(self, config: Dict):
         super().__init__(config)
 
-        self.proxy_model_name = config.get("proxy_model", "bert-base-uncased")
-        self.regen_model_name = config.get("regen_model", "gpt2")
+        # Defaults align with what `evaluate/train_sendetex.py` uses: a
+        # single LLaMA-7B model serves as both proxy (for the frozen
+        # embedding + token-prob features) and the regeneration LM.
+        self.proxy_model_name = config.get("proxy_model", "huggyllama/llama-7b")
+        self.regen_model_name = config.get("regen_model",
+                                           config.get("proxy_model",
+                                                      "huggyllama/llama-7b"))
         self.checkpoint_path = config.get("checkpoint_path")
-        self.d_model = config.get("d_model", 768)
-        self.max_length = config.get("max_length", 512)
+        # LLaMA-7B hidden size is 4096 — override via config if using a
+        # different backbone.
+        self.d_model = config.get("d_model", 4096)
+        self.max_length = config.get("max_length", 128)
         self.regen_max_length = config.get("regen_max_length", 128)
+        self.context_len = config.get("context_len", 3)
 
         device = config.get("device", "auto")
         if device == "auto":
@@ -65,21 +75,33 @@ class SenDetEXDetector(BaseDetector):
         """Load proxy model, regeneration model, and SenDetEX modules."""
         from SenDetEX import SenDetEX as SenDetEXModel
 
-        # Proxy model for embeddings
+        # Load the proxy LM as a causal LM (so we can both get embeddings
+        # and use it for regeneration). This matches training.
         self.proxy_tokenizer = AutoTokenizer.from_pretrained(self.proxy_model_name)
-        self.proxy_model = AutoModel.from_pretrained(self.proxy_model_name)
+        self.proxy_model = AutoModelForCausalLM.from_pretrained(
+            self.proxy_model_name,
+            torch_dtype=torch.float16,
+        )
         self.proxy_model.to(self.device).eval()
+
+        if self.proxy_tokenizer.pad_token is None:
+            self.proxy_tokenizer.pad_token = self.proxy_tokenizer.eos_token
 
         vocab_size = self.proxy_model.config.vocab_size
         proxy_embed = self.proxy_model.get_input_embeddings()
 
-        # Regeneration model (causal LM)
-        self.regen_tokenizer = AutoTokenizer.from_pretrained(self.regen_model_name)
-        self.regen_model = AutoModelForCausalLM.from_pretrained(self.regen_model_name)
-        self.regen_model.to(self.device).eval()
-
-        if self.regen_tokenizer.pad_token is None:
-            self.regen_tokenizer.pad_token = self.regen_tokenizer.eos_token
+        # Re-use the same model for regeneration if names match; otherwise
+        # load a second causal LM.
+        if self.regen_model_name == self.proxy_model_name:
+            self.regen_tokenizer = self.proxy_tokenizer
+            self.regen_model = self.proxy_model
+        else:
+            self.regen_tokenizer = AutoTokenizer.from_pretrained(self.regen_model_name)
+            self.regen_model = AutoModelForCausalLM.from_pretrained(
+                self.regen_model_name, torch_dtype=torch.float16,
+            ).to(self.device).eval()
+            if self.regen_tokenizer.pad_token is None:
+                self.regen_tokenizer.pad_token = self.regen_tokenizer.eos_token
 
         # SenDetEX model
         self.model = SenDetEXModel(
@@ -183,14 +205,26 @@ class SenDetEXDetector(BaseDetector):
             token_probs = token_probs[:seq_len]
             token_logits = token_logits[:seq_len]
 
-        # Forward pass (no label needed for inference)
+        # Forward pass (no label needed for inference).
+        # SenDetEX's Conv/Transformer/Linear weights are fp32; proxy LM may
+        # be fp16. Cast all feature tensors to the SenDetEX dtype so the
+        # conv/linear kernels don't hit a Half vs Float bias mismatch.
+        model_dtype = next(self.model.style.parameters()).dtype
+        token_probs = token_probs.to(dtype=model_dtype)
+        token_logits = token_logits.to(dtype=model_dtype)
         with torch.no_grad():
             # We call the submodules directly to avoid the loss computation
             p_i, e_i, z_ins, z_inf = self.model.encoder(
                 s_ids, r_ids, token_probs, token_logits,
             )
+            # The encoder now returns mean-pooled (1, d) embeddings already,
+            # but they may be fp16 (from the LLM backbone). Cast.
+            z_ins = z_ins.to(dtype=model_dtype)
+            z_inf = z_inf.to(dtype=model_dtype)
+            p_i = p_i.to(dtype=model_dtype)
+            e_i = e_i.to(dtype=model_dtype)
             z_style = self.model.style(p_i, e_i)
-            pred = self.model.fusion(z_style, z_ins.unsqueeze(0), z_inf.unsqueeze(0))
+            pred = self.model.fusion(z_style, z_ins, z_inf)
 
         score = pred.squeeze().item()
         label = 1 if score > 0.5 else 0
@@ -224,6 +258,14 @@ class SenDetEXDetector(BaseDetector):
         # Document-level aggregation
         ai_count = sum(sentence_labels)
         ai_ratio = ai_count / len(sentences) if sentences else 0
+        # Mean of raw sentence scores preserves AUROC-relevant ranking even
+        # when the saturated model predicts most sentences > 0.5. Without this,
+        # a model that scores every sentence at ~0.95 collapses every doc to
+        # ai_ratio=1.0 and AUROC goes to 0.5 by tie.
+        doc_score = (
+            sum(sentence_scores) / len(sentence_scores)
+            if sentence_scores else 0.0
+        )
         if ai_ratio == 0:
             pred_label = "human"
         elif ai_ratio >= 0.9:
@@ -234,7 +276,7 @@ class SenDetEXDetector(BaseDetector):
         return {
             "text": text,
             "label": 1 if ai_count > 0 else 0,
-            "score": float(ai_ratio),
+            "score": float(doc_score),
             "metadata": {
                 "model": "sendetex",
                 "pred_label": pred_label,

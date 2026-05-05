@@ -170,6 +170,27 @@ class SeqXGPTDetector(BaseDetector):
         self.cache_dir = config.get("cache_dir", None)
         self.threshold = config.get("threshold", 0.5)
 
+        # Label scheme: default is the paper's 6-source × BMES = 24 classes
+        # (gpt2/gptneo/gptj/llama/gpt3re/human). If the checkpoint was trained
+        # with a different label set (e.g. our self-trained binary `ai/human`),
+        # set `en_labels` in the config to override.
+        en_labels_cfg = config.get("en_labels")
+        if en_labels_cfg:
+            # Accept either a list (order = id) or a dict (label -> id).
+            if isinstance(en_labels_cfg, list):
+                en_labels_map = {lab: i for i, lab in enumerate(en_labels_cfg)}
+            else:
+                en_labels_map = dict(en_labels_cfg)
+            self.id2label = _construct_bmes_labels(en_labels_map)
+        else:
+            self.id2label = ID2LABEL
+        self.label2id = {v: k for k, v in self.id2label.items()}
+        self.human_label_ids = {
+            self.label2id[f"{p}-human"]
+            for p in ["B", "M", "E", "S"]
+            if f"{p}-human" in self.label2id
+        }
+
         device = config.get("device", "auto")
         self.device = "cuda:0" if (device == "auto" and torch.cuda.is_available()) else device
 
@@ -198,12 +219,12 @@ class SeqXGPTDetector(BaseDetector):
             cache_dir=self.cache_dir,
         )
 
-        # 2. Classifier
+        # 2. Classifier (uses self.id2label, which may be overridden via config)
         if self.classifier_type == "cnn":
-            self.classifier = ModelWiseCNNClassifier(id2labels=ID2LABEL, dropout_rate=0.1)
+            self.classifier = ModelWiseCNNClassifier(id2labels=self.id2label, dropout_rate=0.1)
         else:
             self.classifier = ModelWiseTransformerClassifier(
-                id2labels=ID2LABEL, seq_len=self.seq_len,
+                id2labels=self.id2label, seq_len=self.seq_len,
                 intermediate_size=512, num_layers=2, dropout_rate=0.1,
             )
 
@@ -283,7 +304,7 @@ class SeqXGPTDetector(BaseDetector):
                 word_logits = []
 
         # 5. Convert to label strings and intervals
-        pred_labels = [ID2LABEL.get(p, "O") for p in predictions]
+        pred_labels = [self.id2label.get(p, "O") for p in predictions]
 
         # Get words using original split_sentence
         words = self._split_sentence(text)
@@ -357,8 +378,8 @@ class SeqXGPTDetector(BaseDetector):
         current_start = None
 
         for i, pred_id in enumerate(predictions):
-            label = ID2LABEL.get(pred_id, "O")
-            is_ai = pred_id not in HUMAN_LABEL_IDS
+            label = self.id2label.get(pred_id, "O")
+            is_ai = pred_id not in self.human_label_ids
             prefix = label.split("-")[0] if "-" in label else ""
 
             if i >= len(word_positions):

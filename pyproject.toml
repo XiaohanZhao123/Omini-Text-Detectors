@@ -38,6 +38,7 @@ dependencies = [
     "tensorboard",
     "openai",     # required by baseline/seqxgpt/.../backend_utils.py (module-level import)
     "msgpack",    # required by baseline/seqxgpt/.../backend_utils.py
+    "setuptools<80",
 ]
 
 [project.optional-dependencies]

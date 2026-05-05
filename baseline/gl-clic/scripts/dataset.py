@@ -22,6 +22,14 @@ nlp = spacy.load("en_core_web_sm")
 
 
 class GLCliCCoAuthorDataset(Dataset):
+    # Released-code bug #5: __getitem__ referenced self.type_mapping which was
+    # never attached to the dataset (only to the DataModule). Define it here
+    # with the same values used in data_module.py::GLCliCCoAuthorDataModule.
+    type_mapping = {
+        "creative": 0,
+        "argumentative": 1,
+    }
+
     def __init__(self, data, model_config: GLCLiCModelConfig):
         random.seed(model_config.seed)
 

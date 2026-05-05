@@ -6,7 +6,7 @@
 # Achieves 95.6% word accuracy with paper's exact models (gpt2-xl, gpt-neo-2.7B, gpt-j-6B, llama-7B)
 # Requires ~43GB VRAM total - use feature_devices to distribute across GPUs
 
-model: seqxgpt
+model: seqxgpt-sondos
 
 # Classifier Configuration
 # Type of classifier architecture to use
@@ -19,7 +19,7 @@ classifier_type: transformer
 #   - HuggingFace Hub: zcahjl3/seqxgpt-detector (auto-downloads seqxgpt_transformer.pt)
 #   - HuggingFace Hub with filename: zcahjl3/seqxgpt-detector/seqxgpt_transformer.pt
 # Set to null for untrained model (unreliable predictions)
-checkpoint_path: zcahjl3/seqxgpt-detector
+checkpoint_path: checkpoints/seqxgpt-sondos/seqxgpt_transformer_final.pt
 
 # Feature Extraction Models
 # These LLMs are used to extract log-probability features
@@ -122,3 +122,11 @@ threshold: 0.5
 #
 # result = pipe("Your text here with potentially AI-generated content...")
 # print(result['metadata']['ai_intervals'])  # [[45, 120], [200, 350]]
+
+# Self-trained classifier label override:
+# Our train_seqxgpt_classifier.py used 2-class binary {ai, human} × BMES = 8 classes
+# (instead of paper's 6-class {gpt2,gptneo,gptj,llama,gpt3re,human} × BMES = 24 classes).
+# Set this to match the trained checkpoint's classifier head shape.
+en_labels:
+  ai: 0
+  human: 1

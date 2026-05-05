@@ -513,13 +513,13 @@ class GLCliCCoAuthorDataModule(L.LightningDataModule):
 
     def setup(self, stage=None):
         if stage=='fit':
-            self.train_filtered = self.filter_data(self.data, "train", self.type)
-            self.val_filtered = self.filter_data(self.data, "valid", self.type)
+            self.train_filtered = self.filter_data(self.data, "train", self.essay_type)
+            self.val_filtered = self.filter_data(self.data, "valid", self.essay_type)
 
             self.train_dataset = GLCliCCoAuthorDataset(self.train_filtered, self.model_config)
             self.val_dataset = GLCliCCoAuthorDataset(self.val_filtered, self.model_config)
         elif stage=='test':
-            self.test_filtered = self.filter_data(self.data, "test", self.type)
+            self.test_filtered = self.filter_data(self.data, "test", self.essay_type)
             self.test_dataset = GLCliCCoAuthorDataset(self.test_filtered, self.model_config)
 
 
@@ -635,13 +635,15 @@ class GLCliCSeqXGPTBenchDataModule(L.LightningDataModule):
                 print("\n[DATA] Preprocessing data again due to test mode...\n")
                 self.preprocess()
 
+        # NOTE: the released code referenced `self.stage` here but that
+        # attribute is only set later by Lightning's `setup(stage=...)`
+        # call. In the DataModule constructor self.index_map is also still
+        # empty (filter_data runs inside setup). The two debug prints that
+        # relied on self.stage are harmless to drop; we print something
+        # informative instead without depending on stage.
         if self.test:
-            print(f"\n[DATA] Limit data to maks \"50\" in \"Test Mode\"")
-            if self.stage != "test":
-                self.index_map = self.index_map[:50]
-
-        print(f"\n[DATA] {self.stage} data: {len(self.index_map)}")
-        print()
+            print("\n[DATA] Test Mode enabled — per-stage data will be capped to 50 in setup()\n")
+        print(f"\n[DATA] DataModule initialized (index_map will be populated in setup())\n")
 
 
     def parse_raw_data(self):
