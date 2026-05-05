@@ -5,7 +5,7 @@ Evaluates DAMASHA, GigaCheck, SeqXGPT on essays and abstracts datasets
 with per-token ground-truth labels (0=human, 1=AI).
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
 
     # Single method
     python evaluate/aes/eval_token_level_new.py --methods damasha --device cuda:0

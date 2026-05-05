@@ -2,7 +2,7 @@
 Example usage of Fast-DetectGPT detector with unified interface.
 
 This script demonstrates three usage patterns:
-1. Quick experimentation with default settings
+1. Quick experimentation with standard configuration
 2. Batch processing with custom parameters
 3. Config-driven reproducible setup
 
@@ -24,7 +24,7 @@ def example_1_quick_detection():
     print("Example 1: Quick Detection with Defaults")
     print("=" * 80)
 
-    # Create pipeline with default settings (gpt-neo-2.7B)
+    # Create pipeline with standard configuration (gpt-neo-2.7B)
     pipe = pipeline("ai-text-detection", model="fast-detectgpt")
 
     # Test with a sample text

@@ -5,8 +5,8 @@ Loads datasets into EvalRecord format for detector evaluation.
 Primary datasets (new baseline):
     - aes_chains:           Versioned essay editing chains (v0=human, v1-v3=AI-edited)
     - aes_chains_sentences: Sentence-level labels from the above
-    - sondos_essays:        External essays (~4,200, v0-v8, GPT-generated)
-    - sondos_abstracts:     External abstracts (AI-generated)
+    - opai_bench_essays:        External essays (~4,200, v0-v8, GPT-generated)
+    - opai_bench_abstracts:     External abstracts (AI-generated)
 
 Legacy datasets (kept for backward compatibility):
     - education, enron, privacy, detectrl, m4, raid, hc3, turingbench
@@ -39,8 +39,8 @@ DATASETS = [
     # -- Primary (new baseline) --
     "aes_chains",
     "aes_chains_sentences",
-    "sondos_essays",
-    "sondos_abstracts",
+    "opai_bench_essays",
+    "opai_bench_abstracts",
     # -- Legacy --
     "education",
     "enron",
@@ -60,8 +60,8 @@ def load_dataset(name: str, data_dir: str = "data/", **kwargs) -> Iterator[EvalR
         # Primary
         "aes_chains": lambda: _load_aes_chains(data_dir, **kwargs),
         "aes_chains_sentences": lambda: _load_aes_chains_sentences(data_dir, **kwargs),
-        "sondos_essays": lambda: _load_sondos(data_dir, "essays", **kwargs),
-        "sondos_abstracts": lambda: _load_sondos(data_dir, "abstracts", **kwargs),
+        "opai_bench_essays": lambda: _load_opai_bench(data_dir, "essays", **kwargs),
+        "opai_bench_abstracts": lambda: _load_opai_bench(data_dir, "abstracts", **kwargs),
         # Legacy
         "education": lambda: _load_education(data_dir),
         "enron": lambda: _load_enron(data_dir),
@@ -77,7 +77,7 @@ def load_dataset(name: str, data_dir: str = "data/", **kwargs) -> Iterator[EvalR
     if name in loaders:
         yield from loaders[name]()
     elif name.startswith("custom:"):
-        yield from _load_sondos(data_dir, data_path=name[len("custom:"):], **kwargs)
+        yield from _load_opai_bench(data_dir, data_path=name[len("custom:"):], **kwargs)
     else:
         raise ValueError(f"Unknown dataset: {name}. Options: {DATASETS}")
 
@@ -183,13 +183,13 @@ def _load_aes_chains_sentences(
                     )
 
 
-def _load_sondos(
+def _load_opai_bench(
     data_dir: str,
     dataset_type: str = "essays",
     data_path: str = None,
     max_samples: int = None,
 ) -> Iterator[EvalRecord]:
-    """Load prepared Sondos data (essays or abstracts).
+    """Load prepared OpAI-Bench data (essays or abstracts).
 
     Expects JSONL from prepare_data.py with {human_text, ai_text, domain, ...}.
     """
@@ -197,14 +197,14 @@ def _load_sondos(
         path = Path(data_path)
     else:
         path = (
-            Path(data_dir) / "external" / "sondos" / "prepared"
+            Path(data_dir) / "external" / "opai_bench" / "prepared"
             / f"{dataset_type}_prepared.jsonl"
         )
 
     if not path.exists():
         raise FileNotFoundError(
             f"Data not found at {path}. "
-            "Run: python evaluate/prepare_data.py data/external/sondos"
+            "Run: python evaluate/prepare_data.py data/external/opai_bench"
         )
 
     human_count = ai_count = 0

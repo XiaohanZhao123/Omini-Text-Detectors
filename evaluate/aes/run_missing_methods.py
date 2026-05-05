@@ -5,7 +5,7 @@ These methods aren't in trajectory_analysis_v0v8.py's method list but have
 native confidence at their natural granularity level.
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/run_missing_methods_v0v8.py --method roft-boundary --device cuda:0
     python draft/run_missing_methods_v0v8.py --method dna-detectllm --device cuda:2
     python draft/run_missing_methods_v0v8.py --method damasha --device cuda:4

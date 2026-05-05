@@ -38,7 +38,6 @@ BINARY_DETECTORS = [
     "dna-detectllm",   # Zero-shot, mutation-repair
     "ood-llm-detect",  # OOD-based, DeepSVDD
     "gigacheck",       # Boundary+Classification head
-    "short-phd",       # Zero-shot, topological PHD with prompt augmentation
 ]
 
 # TuringBench generators (all 19)

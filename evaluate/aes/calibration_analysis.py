@@ -22,7 +22,7 @@ Tier C — Document-level sensitivity (3 classifiers: desklib, e5-small, radar)
 Tier D — Cross-tier summary (bar charts + metrics JSON).
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/calibration_analysis.py
 """
 

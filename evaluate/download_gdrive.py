@@ -3,7 +3,7 @@
 
 Usage:
     python download_gdrive.py "https://drive.google.com/drive/folders/XXXXX"
-    python download_gdrive.py "https://drive.google.com/drive/folders/XXXXX" --output_dir data/external/sondos
+    python download_gdrive.py "https://drive.google.com/drive/folders/XXXXX" --output_dir data/external/opai_bench
     python download_gdrive.py --inspect                    # inspect already-downloaded files
 
 Requires: pip install gdown
@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_OUTPUT_DIR = "data/external/sondos"
+DEFAULT_OUTPUT_DIR = "data/external/opai_bench"
 
 
 def download(url: str, output_dir: str = DEFAULT_OUTPUT_DIR):

@@ -2,7 +2,7 @@
 Example usage of SeqXGPT detector with unified interface.
 
 This script demonstrates:
-1. Basic detection with default settings
+1. Basic detection with standard configuration
 2. Batch processing
 3. Analyzing word-level predictions and AI intervals
 

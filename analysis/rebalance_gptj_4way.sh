@@ -6,8 +6,8 @@
 # split the remaining range into 4 equal parts across GPU 0,1,2,3.
 set -u
 
-FEAT_ROOT=/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features
-LOG_ROOT=/datadrive/xiaohan/Omini-Text/results/training_runs/seqxgpt-features
+FEAT_ROOT=data_local/external/opai_bench/v2/prepared/seqxgpt_features
+LOG_ROOT=results/training_runs/seqxgpt-features
 TOTAL=127809
 
 # 1. Verify gpt-neo-2.7b is complete
@@ -55,9 +55,9 @@ for g in 0 1 2 3; do
         3) start=$r3; end=$r4 ;;
     esac
     echo "  GPU $g -> [$start, $end)"
-    UV_CACHE_DIR=/datadrive/xiaohan/uv-cache UV_LINK_MODE=copy \
-    HF_HOME=/datadrive/xiaohan/Omini-Text/cache \
-    TRANSFORMERS_CACHE=/datadrive/xiaohan/Omini-Text/cache/hub \
+    UV_CACHE_DIR=cache/uv UV_LINK_MODE=copy \
+    HF_HOME=cache \
+    TRANSFORMERS_CACHE=cache/hub \
     nohup uv run python analysis/extract_seqxgpt_features.py \
         --llm gpt-j-6b --gpu "$g" --splits train \
         --doc-range-start "$start" --doc-range-end "$end" \

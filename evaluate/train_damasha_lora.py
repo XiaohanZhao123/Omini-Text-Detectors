@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fine-tune DAMASHA (RoBERTa+ModernBERT+CRF) on Sondos v2 with LoRA.
+"""Fine-tune DAMASHA (RoBERTa+ModernBERT+CRF) on OpAI-Bench with LoRA.
 
 Architecture: from baseline/damasha/models/model.py::RoBERTaModernBERTCRF
  - Dual encoder: roberta-base + answerdotai/ModernBERT-Base (same input_ids to both,

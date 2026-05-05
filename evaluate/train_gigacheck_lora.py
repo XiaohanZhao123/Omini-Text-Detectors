@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dispatch wrapper: fine-tune Gigacheck classification head with LoRA on Sondos v2.
+"""Dispatch wrapper: fine-tune Gigacheck classification head with LoRA on OpAI-Bench.
 
 Uses the official gigacheck training pipeline from
   baseline/gigacheck/gigacheck/train/scripts/train_classification_model.py
@@ -28,8 +28,8 @@ _GIGA_ROOT = _REPO_ROOT / "baseline" / "gigacheck"
 _GIGA_SCRIPT = _GIGA_ROOT / "gigacheck" / "train" / "scripts" / "train_classification_model.py"
 _GIGA_DS_CONFIG = _GIGA_ROOT / "gigacheck" / "deepspeed_configs" / "zero2.json"
 
-_DEFAULT_TRAIN = "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/gigacheck_jsonl/train.jsonl"
-_DEFAULT_VAL   = "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/gigacheck_jsonl/val.jsonl"
+_DEFAULT_TRAIN = "data_local/external/opai_bench/v2/prepared/gigacheck_jsonl/train.jsonl"
+_DEFAULT_VAL   = "data_local/external/opai_bench/v2/prepared/gigacheck_jsonl/val.jsonl"
 
 
 def main():
@@ -55,7 +55,7 @@ def main():
     p.add_argument("--bf16", action="store_true", default=True)
     p.add_argument("--use-deepspeed", action="store_true", default=True,
                    help="Use DeepSpeed ZeRO-2 (recommended for Mistral-7B)")
-    # Class weighting for CE loss: Sondos docs are ~1:8 human:ai, so without
+    # Class weighting for CE loss: OpAI-Bench docs are ~1:8 human:ai, so without
     # weighting the classifier collapses to all-AI. These values correspond to
     # the gigacheck id2label order {0: "ai", 1: "human"}.
     p.add_argument("--ce-weight-ai", type=float, default=0.56,

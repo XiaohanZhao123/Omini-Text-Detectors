@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate fine-tuned token/sentence-level detectors on Sondos v2 data.
+"""Evaluate fine-tuned token/sentence-level detectors on OpAI-Bench data.
 
 Evaluates GL-CLiC (sentence-level) and GenAI-Sentence (token-level) checkpoints
 trained by train_token_detector.py. Outputs follow the same 3-file convention
@@ -15,14 +15,14 @@ Usage:
     python evaluate/aes/eval_finetuned_detectors.py \
         --method genai-sentence \
         --checkpoint checkpoints/genai-sentence/best_model.pt \
-        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \
-             data_local/external/sondos/v2/prepared/csv/abstract.csv \
+        --csv data_local/external/opai_bench/v2/prepared/csv/essay.csv \
+             data_local/external/opai_bench/v2/prepared/csv/abstract.csv \
         --split test --device cuda:0
 
     python evaluate/aes/eval_finetuned_detectors.py \
         --method gl-clic \
         --checkpoint checkpoints/gl-clic/best_model.pt \
-        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \
+        --csv data_local/external/opai_bench/v2/prepared/csv/essay.csv \
         --split test --device cuda:0
 """
 

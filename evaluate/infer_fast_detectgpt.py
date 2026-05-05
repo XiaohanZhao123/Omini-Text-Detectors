@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paper-faithful Fast-DetectGPT inference on Sondos v2_updated test split.
+"""Paper-faithful Fast-DetectGPT inference on OpAI-Bench test split.
 
 Uses get_sampling_discrepancy_analytic from baseline/fast-detect-gpt/scripts/fast_detect_gpt.py
 (Bao et al., ICLR 2024). Default sampling=scoring=gpt-neo-2.7B (paper's default).
@@ -140,7 +140,7 @@ def main():
     p.add_argument('--default-threshold', type=float, default=0.0,
                    help='paper default threshold (Bao et al. uses 0.0 for the analytic variant)')
     p.add_argument('--max-dev-docs', type=int, default=2000)
-    p.add_argument('--cache-dir', default='/datadrive/xiaohan/Omini-Text/cache')
+    p.add_argument('--cache-dir', default='cache')
     args = p.parse_args()
 
     device = torch.device(args.device)

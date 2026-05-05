@@ -4,9 +4,9 @@
 Transforms raw CSV/Excel/JSON files into the format expected by data_loader.py.
 
 Usage:
-    python prepare_data.py data/external/sondos                     # prepare all files
-    python prepare_data.py data/external/sondos --inspect           # just inspect
-    python prepare_data.py data/external/sondos --human_col text --ai_col text_eval
+    python prepare_data.py data/external/opai_bench                     # prepare all files
+    python prepare_data.py data/external/opai_bench --inspect           # just inspect
+    python prepare_data.py data/external/opai_bench --human_col text --ai_col text_eval
 
 Output format (one JSONL per dataset):
     {"human_text": "...", "ai_text": "...", "domain": "essay", "ai_model": "gpt", ...}

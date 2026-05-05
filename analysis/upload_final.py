@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Clean HAT-Baselines/baseline_results and upload the final calibrated
+"""Clean <RESULTS_DATASET_REPO> and upload the final calibrated
 per-detector results to tuned_on_new_data/<detector>/.
 
 Deletes:
@@ -17,8 +17,8 @@ import os, sys
 from pathlib import Path
 from huggingface_hub import HfApi
 
-REPO_ID = "HAT-Baselines/baseline_results"
-STAGING = Path("/datadrive/xiaohan/Omini-Text/results/hf_upload_final")
+REPO_ID = os.environ.get("HF_RESULTS_REPO", "<RESULTS_DATASET_REPO>")
+STAGING = Path("results/hf_upload_final")
 
 DETECTORS = [
     "damasha", "gigacheck", "seqxgpt",
@@ -31,6 +31,9 @@ def main():
     token = os.environ.get("HF_TOKEN")
     if not token:
         print("Set HF_TOKEN", file=sys.stderr); sys.exit(1)
+    if REPO_ID == "<RESULTS_DATASET_REPO>":
+        print("Set HF_RESULTS_REPO to the target dataset repository", file=sys.stderr)
+        sys.exit(1)
     api = HfApi(token=token)
 
     # 1. Delete stale top-level folders / files
@@ -79,7 +82,7 @@ def main():
             folder_path=str(src),
             path_in_repo=f"tuned_on_new_data/{det}",
             repo_id=REPO_ID, repo_type="dataset",
-            commit_message=f"Replace {det} with calibrated-threshold predictions on Sondos v2 test",
+            commit_message=f"Replace {det} with calibrated-threshold predictions on OpAI-Bench test",
         )
 
     print("\n[done] https://huggingface.co/datasets/" + REPO_ID)

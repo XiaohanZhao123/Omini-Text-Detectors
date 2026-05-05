@@ -33,16 +33,16 @@ from sklearn.metrics import (
 # HF-downloaded baselines are evaluated only if present.
 DEFAULT_DETECTORS = {
     # fine-tuned (our runs)
-    "damasha-lora":       "/datadrive/xiaohan/Omini-Text/results/predictions/damasha-lora",
-    "gigacheck-lora":     "/datadrive/xiaohan/Omini-Text/results/predictions/gigacheck-lora",
-    "seqxgpt-sondos-preview":  "/datadrive/xiaohan/Omini-Text/results/predictions/seqxgpt-sondos-preview",
-    "seqxgpt-sondos-epoch11":  "/datadrive/xiaohan/Omini-Text/results/predictions/seqxgpt-sondos-epoch11",
-    "seqxgpt-sondos":          "/datadrive/xiaohan/Omini-Text/results/predictions/seqxgpt-sondos",
+    "damasha-lora":       "results/predictions/damasha-lora",
+    "gigacheck-lora":     "results/predictions/gigacheck-lora",
+    "seqxgpt-tuned-preview":  "results/predictions/seqxgpt-tuned-preview",
+    "seqxgpt-tuned-epoch11":  "results/predictions/seqxgpt-tuned-epoch11",
+    "seqxgpt-tuned":          "results/predictions/seqxgpt-tuned",
     # HF baselines (downloaded earlier by WebFetch)
-    "hf-genai-sentence":   "/tmp/hat_results/tuned_on_new_data/genai-sentence",
-    "hf-genai-sentence-v2":"/tmp/hat_results/tuned_on_new_data/genai-sentence-v2",
-    "hf-gl-clic":          "/tmp/hat_results/tuned_on_new_data/gl-clic",
-    "hf-gl-clic-v2":       "/tmp/hat_results/tuned_on_new_data/gl-clic-v2",
+    "hf-genai-sentence":   "/tmp/opai_results/tuned_on_new_data/genai-sentence",
+    "hf-genai-sentence-v2":"/tmp/opai_results/tuned_on_new_data/genai-sentence-v2",
+    "hf-gl-clic":          "/tmp/opai_results/tuned_on_new_data/gl-clic",
+    "hf-gl-clic-v2":       "/tmp/opai_results/tuned_on_new_data/gl-clic-v2",
 }
 
 DOMAINS = ["essay", "abstract", "news", "report"]
@@ -152,7 +152,7 @@ def calibrate_detector(name: str, det_dir: Path, out_root: Path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="/datadrive/xiaohan/Omini-Text/results/calibration")
+    ap.add_argument("--out", default="results/calibration")
     args = ap.parse_args()
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)

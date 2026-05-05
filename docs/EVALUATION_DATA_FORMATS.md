@@ -258,17 +258,17 @@ The `ai_threshold` parameter (default 0.5) can be adjusted via kwargs.
 
 ---
 
-## External Datasets (Sondos)
+## External Datasets (OpAI-Bench)
 
 **Essays**: ~4,200 essays (v0-v8), sentence-level AI modifications, GPT-generated.
 **Abstracts**: Academic abstracts (format TBD, more models forthcoming).
 
-Setup: see `evaluate/CLAUDE.md` for download/prepare/run instructions.
+Setup: prepare the files under `data/external/opai_bench/prepared/` before running evaluation.
 
 ```bash
 python evaluate/download_gdrive.py                        # download
-python evaluate/prepare_data.py data/external/sondos      # prepare
-python evaluate/run_eval.py e5-small sondos_essays        # evaluate
+python evaluate/prepare_data.py data/external/opai_bench      # prepare
+python evaluate/run_eval.py e5-small opai_bench_essays        # evaluate
 ```
 
 ---
@@ -280,5 +280,5 @@ python evaluate/run_eval.py e5-small sondos_essays        # evaluate
 | Education | 331 | 662 | 331 | 331 |
 | Enron | 3,000 | 6,000 | 3,000 | 3,000 |
 | Privacy | 1,500 | 3,000 | 1,500 | 1,500 |
-| Sondos Essays | ~4,200 | ~8,400 | ~4,200 | ~4,200 |
+| OpAI-Bench Essays | ~4,200 | ~8,400 | ~4,200 | ~4,200 |
 | **Total** | **~9,031** | **~18,062** | **~9,031** | **~9,031** |

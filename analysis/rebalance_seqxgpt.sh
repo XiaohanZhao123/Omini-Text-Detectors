@@ -15,8 +15,8 @@
 # Usage: bash analysis/rebalance_seqxgpt.sh
 set -u
 
-FEAT_ROOT=/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features
-LOG_ROOT=/datadrive/xiaohan/Omini-Text/results/training_runs/seqxgpt-features
+FEAT_ROOT=data_local/external/opai_bench/v2/prepared/seqxgpt_features
+LOG_ROOT=results/training_runs/seqxgpt-features
 EXPECTED_TRAIN=127809
 
 # 1. Verify llama-7b is complete
@@ -59,18 +59,18 @@ print(f'{f:.6f} {mid:.6f}')
     echo "[rebalance]   GPU $gpu_a -> range [$frac_done, $mid)"
     echo "[rebalance]   GPU $gpu_b -> range [$mid, 1.0)"
 
-    UV_CACHE_DIR=/datadrive/xiaohan/uv-cache UV_LINK_MODE=copy \
-    HF_HOME=/datadrive/xiaohan/Omini-Text/cache \
-    TRANSFORMERS_CACHE=/datadrive/xiaohan/Omini-Text/cache/hub \
+    UV_CACHE_DIR=cache/uv UV_LINK_MODE=copy \
+    HF_HOME=cache \
+    TRANSFORMERS_CACHE=cache/hub \
     nohup uv run python analysis/extract_seqxgpt_features.py \
         --llm "$llm" --gpu "$gpu_a" --splits train \
         --doc-range-start "$frac_done" --doc-range-end "$mid" \
         > "$LOG_ROOT/${llm}-gpu${gpu_a}-rebalA.log" 2>&1 &
     echo "[rebalance]   gpu $gpu_a PID=$!"
 
-    UV_CACHE_DIR=/datadrive/xiaohan/uv-cache UV_LINK_MODE=copy \
-    HF_HOME=/datadrive/xiaohan/Omini-Text/cache \
-    TRANSFORMERS_CACHE=/datadrive/xiaohan/Omini-Text/cache/hub \
+    UV_CACHE_DIR=cache/uv UV_LINK_MODE=copy \
+    HF_HOME=cache \
+    TRANSFORMERS_CACHE=cache/hub \
     nohup uv run python analysis/extract_seqxgpt_features.py \
         --llm "$llm" --gpu "$gpu_b" --splits train \
         --doc-range-start "$mid" --doc-range-end "1.0" \

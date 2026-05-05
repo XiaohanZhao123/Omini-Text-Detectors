@@ -25,7 +25,7 @@ Deviations from paper:
     the model from logits, matching the original FeatureEncoder.
 
 Run:
-  cd /home/qid/.omnara/worktrees/Omini-Text-Detectors/omnara/punisher-agreeing
+  cd <REPO_ROOT>
   CUDA_VISIBLE_DEVICES=3 uv run python evaluate/train_sendetex.py --device cuda
 """
 
@@ -72,9 +72,9 @@ SEQXGPT_FILES = [
     "en_llama_lines.jsonl",
 ]
 
-DEFAULT_CHECKPOINT_DIR = Path("/datadrive/xiaohan/Omini-Text/checkpoints/sendetex/seqxgpt_bench")
+DEFAULT_CHECKPOINT_DIR = Path("checkpoints/sendetex/seqxgpt_bench")
 DEFAULT_FEATURE_CACHE = Path(
-    "/datadrive/xiaohan/Omini-Text/cache/sendetex/seqxgpt_bench_feats_llama7b"
+    "cache/sendetex/seqxgpt_bench_feats_llama7b"
 )
 
 
@@ -869,11 +869,11 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     # Pin HF caches to the external volume (global storage discipline)
-    os.environ.setdefault("HF_HOME", "/datadrive/xiaohan/Omini-Text/cache")
+    os.environ.setdefault("HF_HOME", "cache")
     os.environ.setdefault("TRANSFORMERS_CACHE",
-                          "/datadrive/xiaohan/Omini-Text/cache/hub")
+                          "cache/hub")
     os.environ.setdefault("HF_HUB_CACHE",
-                          "/datadrive/xiaohan/Omini-Text/cache")
+                          "cache")
     np.random.seed(args.seed)
     random.seed(args.seed)
     torch.manual_seed(args.seed)

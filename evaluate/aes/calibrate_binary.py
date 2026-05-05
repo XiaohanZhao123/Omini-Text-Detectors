@@ -7,7 +7,7 @@ Three experiments with 75/25 document-level train/test split:
   3. E5-Small: LoRA fine-tuning from base intfloat/e5-small
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     CUDA_VISIBLE_DEVICES=0,1 python draft/calibrate_binary_aes.py --method binoculars
     CUDA_VISIBLE_DEVICES=0,1 python draft/calibrate_binary_aes.py --method fast-detectgpt
     CUDA_VISIBLE_DEVICES=0    python draft/calibrate_binary_aes.py --method e5-small
@@ -25,7 +25,7 @@ from collections import defaultdict
 from scipy.stats import norm
 
 # Paths
-DATA_PATH = Path("/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl")
+DATA_PATH = Path("data/aes_chains_pilot_aligned.jsonl")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = Path(__file__).resolve().parent / "results" / "aes_calibration"
 

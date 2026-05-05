@@ -29,10 +29,10 @@ from sklearn.metrics import (
     accuracy_score, f1_score, precision_score, recall_score, roc_auc_score,
 )
 
-RESULTS = Path("/datadrive/xiaohan/Omini-Text/results")
+RESULTS = Path("results")
 PREDICTIONS = RESULTS / "predictions"
 CALIBRATION = RESULTS / "calibration"
-HF_LOCAL_CACHE = Path("/tmp/hat_results/tuned_on_new_data")  # HF baselines already downloaded here
+HF_LOCAL_CACHE = Path("/tmp/opai_results/tuned_on_new_data")  # HF baselines already downloaded here
 STAGING = RESULTS / "hf_upload_final"
 
 # Mapping: public HF detector name -> where to pull predictions from on disk
@@ -52,7 +52,7 @@ DETECTORS = {
             "lora_target_modules": {"roberta": ["query", "value"], "modernbert": ["Wqkv"]},
         },
         "training_note": (
-            "Fine-tuned DAMASHA-RMC (RoBERTa+ModernBERT+CRF) on Sondos v2 "
+            "Fine-tuned DAMASHA-RMC (RoBERTa+ModernBERT+CRF) on OpAI-Bench "
             "mixed. LoRA r=8 on both encoders' attention projections; CRF + "
             "fusion + info_mask + classifier fully trainable (~2M params of "
             "275M total). Final: epoch 1 checkpoint at LR=1e-5 "
@@ -75,7 +75,7 @@ DETECTORS = {
             "ce_weights": [0.56, 4.50],
         },
         "training_note": (
-            "Fine-tuned official gigacheck classification head on Sondos v2 "
+            "Fine-tuned official gigacheck classification head on OpAI-Bench "
             "(all 4 domains, 127,809 train docs, 2-class v0->human else ai). "
             "Base: Mistral-7B-v0.3, LoRA r=8 on q_proj/v_proj, "
             "classification_head fully trainable. ce_weights=[0.56, 4.50] "
@@ -85,8 +85,8 @@ DETECTORS = {
         ),
     },
     "seqxgpt": {
-        "src_predictions": PREDICTIONS / "seqxgpt-sondos",
-        "cal_dir":         CALIBRATION / "seqxgpt-sondos",
+        "src_predictions": PREDICTIONS / "seqxgpt-tuned",
+        "cal_dir":         CALIBRATION / "seqxgpt-tuned",
         "ours": True,
         "model_config": {
             "classifier_type": "Transformer",
@@ -98,7 +98,7 @@ DETECTORS = {
         },
         "training_note": (
             "Per-word log-likelihood features from 4 LLMs (gpt2-xl fp32, "
-            "others 8-bit) extracted on all Sondos v2 splits. Classifier: "
+            "others 8-bit) extracted on all OpAI-Bench splits. Classifier: "
             "ModelWiseTransformerClassifier (CNN + 2-layer Transformer + CRF, "
             "~1.7M params) on 8-class BMES labels (B/M/E/S x {ai, human}). "
             "AdamW lr=5e-5, weight_decay=0.1, warmup 0.1, batch=32, 20 epochs. "
@@ -111,9 +111,9 @@ DETECTORS = {
         "cal_dir":         CALIBRATION / "hf-genai-sentence",
         "ours": False,
         "training_note": (
-            "Original fine-tuned checkpoint from the HAT-Baselines release "
+            "Original fine-tuned checkpoint from the OpAI-Bench release "
             "(DeBERTa-v3-base + BiGRU + CRF token classifier, trained 3 epochs "
-            "on Sondos v2 mixed with batch=16, lr=2e-5). "
+            "on OpAI-Bench mixed with batch=16, lr=2e-5). "
             "Predictions here are the same as the original tuned_on_new_data/"
             "genai-sentence/ release but with calibrated-threshold "
             "document-level labels."
@@ -125,7 +125,7 @@ DETECTORS = {
         "ours": False,
         "training_note": (
             "Same DeBERTa+BiGRU+CRF token classifier as genai-sentence, "
-            "retrained variant from the HAT-Baselines release. Predictions "
+            "retrained variant from the OpAI-Bench release. Predictions "
             "here are the same as the original tuned_on_new_data/"
             "genai-sentence-v2/ release but with calibrated-threshold "
             "document-level labels."
@@ -137,7 +137,7 @@ DETECTORS = {
         "ours": False,
         "training_note": (
             "Original sentence-level DeBERTa-v3 classifier from the "
-            "HAT-Baselines release (GL-CLiC IJCNLP-AACL 2025). Predictions "
+            "OpAI-Bench release (GL-CLiC IJCNLP-AACL 2025). Predictions "
             "here are the same as the original tuned_on_new_data/gl-clic/ "
             "release but with calibrated-threshold document-level labels."
         ),
@@ -147,7 +147,7 @@ DETECTORS = {
         "cal_dir":         CALIBRATION / "hf-gl-clic-v2",
         "ours": False,
         "training_note": (
-            "Retrained variant of gl-clic from the HAT-Baselines release. "
+            "Retrained variant of gl-clic from the OpAI-Bench release. "
             "Predictions here are the same as the original tuned_on_new_data/"
             "gl-clic-v2/ release but with calibrated-threshold document-level "
             "labels."
@@ -293,7 +293,7 @@ def process_detector(name: str, info: dict, stage_root: Path):
                 "method": name,
                 "model_config": info["model_config"],
                 "dataset": dom,
-                "csv_path": f"data_local/external/sondos/v2/prepared/csv/{dom}.csv",
+                "csv_path": f"data_local/external/opai_bench/v2/prepared/csv/{dom}.csv",
                 "split": "test",
                 "device": "cuda:0",
                 "timestamp": "2026-04-19_01-00-00",

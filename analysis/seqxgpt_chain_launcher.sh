@@ -11,8 +11,8 @@
 #   >0 = something unexpected (abort + diagnose)
 set -u
 
-FEAT_ROOT=/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features
-LOG_ROOT=/datadrive/xiaohan/Omini-Text/results/training_runs/seqxgpt-features
+FEAT_ROOT=data_local/external/opai_bench/v2/prepared/seqxgpt_features
+LOG_ROOT=results/training_runs/seqxgpt-features
 GPU=${SEQXGPT_GPU:-1}
 CHAIN=(gpt2-xl gpt-neo-2.7b gpt-j-6b llama-7b)
 
@@ -46,10 +46,10 @@ launch_llm() {
     local llm="$1"
     local log="$LOG_ROOT/$llm.log"
     echo "[chain] Launching $llm on GPU $GPU"
-    UV_CACHE_DIR=/datadrive/xiaohan/uv-cache \
+    UV_CACHE_DIR=cache/uv \
     UV_LINK_MODE=copy \
-    HF_HOME=/datadrive/xiaohan/Omini-Text/cache \
-    TRANSFORMERS_CACHE=/datadrive/xiaohan/Omini-Text/cache/hub \
+    HF_HOME=cache \
+    TRANSFORMERS_CACHE=cache/hub \
     nohup uv run python analysis/extract_seqxgpt_features.py \
         --llm "$llm" --gpu "$GPU" --splits test dev train \
         > "$log" 2>&1 &

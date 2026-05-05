@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standardize Sondos v2 data for the unified training and evaluation pipelines.
+"""Standardize OpAI-Bench data for the unified training and evaluation pipelines.
 
 Reads the raw v2 CSVs (4 domains x 3 AI models) and produces:
   1. Unified CSV   — drop-in replacement for finetune/dataset.py
@@ -10,7 +10,7 @@ The two outputs share identical data; only the format differs so that
 every downstream pipeline can consume the data without modification.
 
 Directory layout expected:
-    data_local/external/sondos/v2/
+    data_local/external/opai_bench/v2/
         Abstract/Abstract/*.csv
         Essays/Essays/*.csv
         News/News/*.csv
@@ -18,16 +18,16 @@ Directory layout expected:
 
 Usage:
     # Inspect all files first
-    python evaluate/prepare_sondos_v2.py --inspect
+    python evaluate/prepare_opai_bench.py --inspect
 
-    # Prepare all data (default output: data_local/external/sondos/v2/prepared/)
-    python evaluate/prepare_sondos_v2.py
+    # Prepare all data (default output: data_local/external/opai_bench/v2/prepared/)
+    python evaluate/prepare_opai_bench.py
 
     # Prepare specific domains
-    python evaluate/prepare_sondos_v2.py --domains abstract essays
+    python evaluate/prepare_opai_bench.py --domains abstract essays
 
     # Custom output directory
-    python evaluate/prepare_sondos_v2.py --out data/sondos_v2/
+    python evaluate/prepare_opai_bench.py --out data/opai_bench/
 """
 
 import argparse
@@ -44,7 +44,7 @@ import pandas as pd
 # ============================================================================
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = ROOT / "data_local" / "external" / "sondos" / "v2"
+DEFAULT_INPUT = ROOT / "data_local" / "external" / "opai_bench" / "v2"
 DEFAULT_OUTPUT = DEFAULT_INPUT / "prepared"
 
 # Map subdirectory name to domain label
@@ -62,7 +62,7 @@ REQUIRED_COLS = [
 ]
 
 # Columns we always carry through (superset across old/new data).
-# Sentence-level columns (`sentences`, `sent_labels`, …) are provided by Sondos in
+# Sentence-level columns (`sentences`, `sent_labels`, …) are provided by OpAI-Bench in
 # the April 14 v2 `_clean.csv` files and are preserved verbatim so downstream
 # pipelines can use them without re-deriving from token-level labels.
 STANDARD_COLS = [
@@ -77,7 +77,7 @@ STANDARD_COLS = [
     "ai_spans_char", "ai_spans_tok",
     "num_ai_spans_tok", "avg_ai_span_len_tok",
     "tokens", "tok_labels", "boundary_pattern",
-    # Sentence-level fields from Sondos's v2 _clean CSVs (April 14, 2026+)
+    # Sentence-level fields from OpAI-Bench's v2 _clean CSVs (April 14, 2026+)
     "sentences", "sent_labels",
     "sentences_number", "v0_sentences_number", "sentence_count_match_v0",
 ]
@@ -134,7 +134,7 @@ def load_and_standardize(domain: str, ai_model: str, csv_path: Path) -> pd.DataF
     """Load a single CSV and standardize its columns.
 
     Deduplicates on (essay_id, version) to protect against known upstream
-    duplication in Sondos's Abstract v2 _clean CSVs (≈30–40% duplicate keys —
+    duplication in OpAI-Bench's Abstract v2 _clean CSVs (≈30–40% duplicate keys —
     some identical, some with minor generation variants for the same slot).
     The first occurrence is kept for deterministic, reproducible output.
     """
@@ -156,7 +156,7 @@ def load_and_standardize(domain: str, ai_model: str, csv_path: Path) -> pd.DataF
     # Step 1: drop fully-identical rows (cheap, unambiguous).
     df = df.drop_duplicates()
     # Step 2: drop (essay_id, version) key duplicates, keeping the first row.
-    # Sondos's data model is one row per (essay_id, version); extra rows with
+    # OpAI-Bench's data model is one row per (essay_id, version); extra rows with
     # the same key are treated as redundant variants regardless of text diffs.
     if {"essay_id", "version"}.issubset(df.columns):
         df = df.drop_duplicates(subset=["essay_id", "version"], keep="first")
@@ -292,7 +292,7 @@ def write_aes_chains_jsonl(csv_files: list[tuple[str, str, Path]], output_dir: P
                     if not text or not text.strip():
                         text = " ".join(str(t) for t in tokens_raw)
 
-                    # Prefer Sondos's explicit sentence-level labels when the
+                    # Prefer OpAI-Bench's explicit sentence-level labels when the
                     # CSV provides them (v2 _clean files, April 14+). Fall back
                     # to deriving from token labels for older CSV layouts.
                     sentences_raw = _parse_json_field(row.get("sentences", "[]"))
@@ -325,7 +325,7 @@ def write_aes_chains_jsonl(csv_files: list[tuple[str, str, Path]], output_dir: P
                         "operation": op,
                         "ai_ratio": ai_ratio,
                     }
-                    # Surface Sondos's raw sentence list when available so
+                    # Surface OpAI-Bench's raw sentence list when available so
                     # sentence-level evaluators don't have to re-split text.
                     if sentences_raw:
                         entry["sentences"] = sentences_raw

@@ -3,7 +3,7 @@
 
 Loads the LoRA adapter saved to checkpoint-5000 (on top of
 mistralai/Mistral-7B-v0.3), runs the test split, outputs per-doc predictions +
-per-domain summary matching the HAT-Baselines schema.
+per-domain summary matching the OpAI-Bench schema.
 
 Gigacheck is DOCUMENT-LEVEL classification (2-class: ai/human).
 This wrapper doesn't output per-token predictions (the DETR head wasn't
@@ -164,15 +164,15 @@ def run_domain(model, tokenizer, rows, device, domain, out_dir, max_length):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--ckpt-dir", default="/datadrive/xiaohan/Omini-Text/results/training_runs/gigacheck-lora/checkpoint-5000")
+    p.add_argument("--ckpt-dir", default="results/training_runs/gigacheck-lora/checkpoint-5000")
     p.add_argument("--csvs", nargs="+", default=[
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/essay.csv",
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/abstract.csv",
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/news.csv",
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/report.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/essay.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/abstract.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/news.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/report.csv",
     ])
     p.add_argument("--out-dir",
-                   default="/datadrive/xiaohan/Omini-Text/results/predictions/gigacheck-lora")
+                   default="results/predictions/gigacheck-lora")
     p.add_argument("--split", default="test")
     p.add_argument("--max-length", type=int, default=512)
     p.add_argument("--device", default="cuda:0")

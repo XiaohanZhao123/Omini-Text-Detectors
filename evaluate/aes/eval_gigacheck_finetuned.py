@@ -6,7 +6,7 @@ computes token-level metrics (accuracy, AI-F1, precision, recall)
 using the filtered ground truth (≥2-word intervals).
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/eval_gigacheck_finetuned.py --checkpoint_dir draft/results/aes_gigacheck_finetune/checkpoints
 """
 

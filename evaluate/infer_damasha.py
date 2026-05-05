@@ -2,8 +2,8 @@
 """Test-set inference for Damasha LoRA checkpoint.
 
 Loads checkpoints/damasha-lora/best_model.pt (LoRA-wrapped RoBERTa+ModernBERT+CRF),
-runs on the Sondos v2 test split, saves per-doc predictions in the same JSONL
-schema used by the HAT-Baselines HF repo so downstream tooling stays consistent.
+runs on the OpAI-Bench test split, saves per-doc predictions in the same JSONL
+schema used by the released results repository so downstream tooling stays consistent.
 
 Output:
   <out>/predictions.jsonl   per-doc: doc_id, essay_id, version, ai_model, ...,
@@ -36,7 +36,7 @@ from train_damasha_lora import (  # noqa: E402
 
 def sent_labels_from_tok(words, sent_labels, tok_labels):
     """Convert per-sentence gt and per-token preds into per-sentence labels via
-    simple majority vote. Sondos already gives us sent_labels, so use them for
+    simple majority vote. OpAI-Bench already gives us sent_labels, so use them for
     the GT side and derive per-sentence prediction from tok-level preds."""
     # not used here directly — kept for completeness
     return sent_labels
@@ -133,7 +133,7 @@ def per_token_preds(model, tokenizer, words, style_features, device, max_length=
 
 def compute_sent_preds(words, per_word_pred, per_word_prob, sentences):
     """Majority-vote per sentence from word predictions.
-    sentences: list of list-of-words or list-of-str (Sondos gives each sentence as a string)."""
+    sentences: list of list-of-words or list-of-str (OpAI-Bench gives each sentence as a string)."""
     # Walk words cursor; for each sentence, pick the next K words.
     sent_preds, sent_scores = [], []
     cursor = 0
@@ -243,14 +243,14 @@ def run_domain(model, tokenizer, rows, device, domain, out_dir, max_length=512):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--ckpt", default="/datadrive/xiaohan/Omini-Text/results/training_runs/damasha-lora/best_model.pt")
+    p.add_argument("--ckpt", default="results/training_runs/damasha-lora/best_model.pt")
     p.add_argument("--csvs", nargs="+", default=[
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/essay.csv",
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/abstract.csv",
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/news.csv",
-        "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv/report.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/essay.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/abstract.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/news.csv",
+        "data_local/external/opai_bench/v2/prepared/csv/report.csv",
     ])
-    p.add_argument("--out-dir", default="/datadrive/xiaohan/Omini-Text/results/predictions/damasha-lora")
+    p.add_argument("--out-dir", default="results/predictions/damasha-lora")
     p.add_argument("--split", default="test")
     p.add_argument("--max-length", type=int, default=512)
     p.add_argument("--device", default="cuda:0")

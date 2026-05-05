@@ -8,7 +8,7 @@ Binoculars & Fast-DetectGPT: re-use saved raw scores (no GPU needed).
 E5-Small: train 3 separate LoRA models, one per version pair.
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/calibrate_binary_aes_balanced.py --method binoculars
     python draft/calibrate_binary_aes_balanced.py --method fast-detectgpt
     CUDA_VISIBLE_DEVICES=0 python draft/calibrate_binary_aes_balanced.py --method e5-small
@@ -22,7 +22,7 @@ import numpy as np
 from pathlib import Path
 from scipy.stats import norm
 
-DATA_PATH = Path("/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl")
+DATA_PATH = Path("data/aes_chains_pilot_aligned.jsonl")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PREV_DIR = Path(__file__).resolve().parent / "results" / "aes_calibration"
 OUTPUT_DIR = Path(__file__).resolve().parent / "results" / "aes_calibration_balanced"

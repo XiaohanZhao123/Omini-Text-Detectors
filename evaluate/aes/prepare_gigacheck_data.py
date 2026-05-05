@@ -9,7 +9,7 @@ Steps:
   5. Output train/val/test JSONL in GigaCheck TextSample format
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/prepare_aes_gigacheck_data.py
 """
 
@@ -23,7 +23,7 @@ from collections import defaultdict
 # Config
 # ============================================================================
 
-AES_PATH = Path("/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl")
+AES_PATH = Path("data/aes_chains_pilot_aligned.jsonl")
 OUTPUT_DIR = Path(__file__).resolve().parent / "results" / "aes_gigacheck_finetune"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

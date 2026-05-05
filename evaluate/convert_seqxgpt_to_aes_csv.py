@@ -22,7 +22,7 @@ where:
 Usage:
     python evaluate/convert_seqxgpt_to_aes_csv.py \
         --src baseline/gl-clic/dataset/SeqXGPT-Bench/raw \
-        --out /datadrive/xiaohan/Omini-Text/training_data/seqxgpt_aes.csv
+        --out training_data/seqxgpt_aes.csv
 """
 
 import argparse

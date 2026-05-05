@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train the small SeqXGPT classifier on the Sondos v2 extracted features.
+"""Train the small SeqXGPT classifier on the OpAI-Bench extracted features.
 
 Inputs (produced by analysis/extract_seqxgpt_features.py):
   <FEAT_ROOT>/<split>/meta.jsonl          per-doc: doc_id, words, tok_labels
@@ -19,7 +19,7 @@ For each doc:
 Model: `ModelWiseTransformerClassifier` from baseline/seqxgpt/.../model.py
 (CNN + Transformer + CRF; ~1-2M params; training ~20 min on one GPU.)
 
-Output: checkpoints/seqxgpt-sondos/seqxgpt_transformer.pt
+Output: checkpoints/seqxgpt-tuned/seqxgpt_transformer.pt
 """
 from __future__ import annotations
 import argparse, ast, json, os, sys, time
@@ -43,7 +43,7 @@ from model import ModelWiseTransformerClassifier  # noqa: E402
 
 
 FEAT_ROOT = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features"
+    "data_local/external/opai_bench/v2/prepared/seqxgpt_features"
 )
 LLMS = ["gpt2-xl", "gpt-neo-2.7b", "gpt-j-6b", "llama-7b"]
 
@@ -322,7 +322,7 @@ def main():
     p.add_argument("--warm-up-ratio", type=float, default=0.1)
     p.add_argument("--max-train", type=int, default=None)
     p.add_argument("--max-dev", type=int, default=None)
-    p.add_argument("--output-dir", default="checkpoints/seqxgpt-sondos")
+    p.add_argument("--output-dir", default="checkpoints/seqxgpt-tuned")
     args = p.parse_args()
     train(args)
 

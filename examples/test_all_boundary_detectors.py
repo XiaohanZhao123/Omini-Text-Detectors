@@ -96,7 +96,7 @@ def test_seqxgpt():
     print("\n" + "=" * 70)
     print("Testing SeqXGPT (4-model features + Transformer classifier)")
     print("=" * 70)
-    print("Loading checkpoint from: zcahjl3/seqxgpt-detector")
+    print("Loading checkpoint from: <LOCAL_SEQXGPT_CHECKPOINT>")
 
     try:
         pipe = pipeline(

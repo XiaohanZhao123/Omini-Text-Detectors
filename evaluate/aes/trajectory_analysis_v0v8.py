@@ -10,7 +10,7 @@ Trajectory-native metrics:
 3. **Global**: Flip depth distribution, cumulative detection, ideal trajectory rate
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
 
     # Run local detectors
     python draft/trajectory_analysis_v0v8.py --mode predict --methods local --device cuda:0
