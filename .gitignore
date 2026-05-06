@@ -73,3 +73,14 @@ data/
 
 # Stray dataset checkpoint CSVs left in repo root (data products, not source)
 /*_checkpoint.csv
+
+# Carve-out: ship the second-opinion commit-gate hook + its registration
+# while keeping the rest of .claude/ (commands/, skills/, settings.local.json,
+# scheduled_tasks.lock, etc.) gitignored as personal/runtime state.
+!.claude/
+.claude/*
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/second-opinion-commit-gate.sh
+!.claude/hooks/README.md
+!.claude/settings.json

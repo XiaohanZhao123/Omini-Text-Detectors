@@ -1,0 +1,16 @@
+{
+  "$comment": "Project-shared Claude Code settings (committed). Personal overrides go in settings.local.json.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/second-opinion-commit-gate.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
