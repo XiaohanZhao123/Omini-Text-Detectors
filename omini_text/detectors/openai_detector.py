@@ -1,5 +1,5 @@
 """
-OpenAI GPT LLM-as-Judge detector for AI text classification.
+OpenAI GPT language-model detector for AI text classification.
 
 Uses the OpenAI API to classify text as human-written or AI-generated.
 Supports multiple variants with different reasoning effort levels.
@@ -78,7 +78,7 @@ class OpenAIDetector(BaseDetector):
     """
     OpenAI GPT-based AI text detector.
 
-    Uses GPT models as an LLM judge to classify text as human or AI-generated.
+    Uses GPT models as language-model detectors to classify text as human or AI-generated.
     Supports different reasoning effort levels for cost/quality trade-off.
     """
 

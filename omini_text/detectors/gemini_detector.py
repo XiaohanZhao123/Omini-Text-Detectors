@@ -1,5 +1,5 @@
 """
-Gemini LLM-as-Judge detector for AI text classification.
+Gemini language-model detector for AI text classification.
 
 Uses the Google GenAI API to classify text as human-written or AI-generated.
 Supports multiple variants with different models, prompting strategies, and thinking levels.
@@ -79,7 +79,7 @@ class GeminiDetector(BaseDetector):
     """
     Gemini-based AI text detector using Google GenAI API.
 
-    Uses Gemini models as an LLM judge with structured output (Pydantic schemas).
+    Uses Gemini models as language-model detectors with structured output.
     Supports configurable thinking levels for cost/quality trade-off.
     Also provides batch API methods for large-scale evaluation.
     """

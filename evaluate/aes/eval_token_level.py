@@ -5,7 +5,7 @@ Evaluates boundary detection models at the word level by comparing predicted
 word labels against ground-truth token_labels from the AES Chains dataset.
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 python draft/eval_aes_token_level.py
 """
 
@@ -32,7 +32,7 @@ from evaluate.boundary_metrics import token_level_metrics
 # Configuration
 # ============================================================================
 
-DATA_PATH = "/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl"
+DATA_PATH = "data/aes_chains_pilot_aligned.jsonl"
 OUTPUT_DIR = PROJECT_ROOT / "draft" / "results" / "aes_token_level"
 
 DETECTORS = {

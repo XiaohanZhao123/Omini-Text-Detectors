@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Convert Sondos v2 prepared CSVs to gigacheck classification jsonl format.
+"""Convert OpAI-Bench prepared CSVs to gigacheck classification jsonl format.
 
 Gigacheck expects per-sample:
   {"label": "human" | "ai", "text": "...", "data_type": "<domain>"}
 
 Label mapping (2-class, matches gigacheck's default id2label={0:"ai", 1:"human"}
-and Sondos v2's benchmark convention `doc_label_gt = (AI_sent_ratio > 0)`):
+and OpAI-Bench's benchmark convention `doc_label_gt = (AI_sent_ratio > 0)`):
   - AI_sent_ratio == 0.0                -> "human"   (v0 rows)
   - AI_sent_ratio  > 0.0                -> "ai"      (v1..v8, mixed or pure AI)
 
@@ -14,7 +14,7 @@ script hard-codes 2 classes; using 3 would diverge from their recipe and
 require touching their ModelArguments default.
 
 Writes to:
-  <ext>/data_local/external/sondos/v2/prepared/gigacheck_jsonl/<split>.jsonl
+  <ext>/data_local/external/opai_bench/v2/prepared/gigacheck_jsonl/<split>.jsonl
 
 All 4 domains concatenated. Split name maps {dev -> val} to match gigacheck's
 train_classification_model.sh (which expects eval_data_path val.jsonl).
@@ -25,10 +25,10 @@ from pathlib import Path
 import pandas as pd
 
 PREPARED_CSV_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv"
+    "data_local/external/opai_bench/v2/prepared/csv"
 )
 OUT_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/gigacheck_jsonl"
+    "data_local/external/opai_bench/v2/prepared/gigacheck_jsonl"
 )
 
 

@@ -14,19 +14,19 @@ Output: results/aes_doc_eval_qwen_hf_staging/
             run_config.json
 
 Namespace + granularity mapping follows the existing HF folders under
-`HAT-Baselines/baseline_results/`:
+`<RESULTS_DATASET_REPO>/`:
 
   DETECTOR          NAMESPACE                  GRANULARITY  PROVENANCE
   -----------------------------------------------------------------------
-  adaloc            default_setting            sentence/    paper-original ckpt
+  adaloc            zero_shot_methods            sentence/    paper-original ckpt
   damasha           tuned_on_new_data          token/       our v2-LoRA
   gigacheck         tuned_on_new_data          doc/         our v2-LoRA (moved from span/)
   gl-clic-simpli..  tuned_on_new_data          sentence/    our SeqXGPT-Bench train
-  seqxgpt           tuned_on_new_data          sentence/    HF zcahjl3 ckpt
+  seqxgpt           tuned_on_new_data          sentence/    local SeqXGPT checkpoint
   sendetex          tuned_on_new_data          sentence/    our SeqXGPT-Bench train
 
 Cell naming convention matches each namespace's existing style:
-  - default_setting: <domains>_<generator>  (plural domain, `abstracts_qwen3-8b`)
+  - zero_shot_methods: <domains>_<generator>  (plural domain, `abstracts_qwen3-8b`)
   - tuned_on_new_data: <domain>_<generator> (singular domain, `abstract_qwen3-8b`)
     NOTE: tuned_on_new_data historically has cells WITHOUT generator suffix
     (in-distribution v2 eval). The `_qwen3-8b` suffix is a new convention
@@ -52,13 +52,13 @@ from pathlib import Path
 # IMPORTANT: this mapping reflects *which ckpt was actually used at eval time*
 # by the pipeline(), which is what `omini_text/configs/<detector>.yaml` points
 # at. damasha + gigacheck configs point at the HuggingFace base (saiteja33
-# / iitolstykh), NOT our Sondos-v2 LoRA adapters — so their task-1 OOD-on-Qwen
-# result belongs in `default_setting/` (same-provenance as the existing 3
+# / iitolstykh), NOT our OpAI-Bench-v2 LoRA adapters — so their task-1 OOD-on-Qwen
+# result belongs in `zero_shot_methods/` (same-provenance as the existing 3
 # generator cells), not `tuned_on_new_data/`.
 DETECTOR_PLACEMENT = {
-    "adaloc":             ("default_setting",   "sentence"),
-    "damasha":            ("default_setting",   "token"),
-    "gigacheck":          ("default_setting",   "span"),
+    "adaloc":             ("zero_shot_methods",   "sentence"),
+    "damasha":            ("zero_shot_methods",   "token"),
+    "gigacheck":          ("zero_shot_methods",   "span"),
     "gl-clic-simplified": ("tuned_on_new_data", "sentence"),
     "gl-clic":            ("tuned_on_new_data", "sentence"),  # alias → simplified
     "seqxgpt":            ("tuned_on_new_data", "sentence"),
@@ -73,29 +73,29 @@ DETECTOR_TRAINING_SOURCE = {
     ),
     "damasha": (
         "HuggingFace base saiteja33/DAMASHA-RMC (RoBERTa + ModernBERT + CRF), "
-        "as published — NOT fine-tuned on Sondos v2 nor on Qwen"
+        "as published — NOT fine-tuned on OpAI-Bench nor on Qwen"
     ),
     "gigacheck": (
         "HuggingFace base iitolstykh/GigaCheck-Detector-Multi (Mistral-7B + "
-        "DETR), as published — NOT fine-tuned on Sondos v2 nor on Qwen"
+        "DETR), as published — NOT fine-tuned on OpAI-Bench nor on Qwen"
     ),
     "sendetex": (
         "trained from scratch on SeqXGPT-Bench (LLaMA-7B proxy), "
-        "NOT trained on Sondos v2 nor on Qwen"
+        "NOT trained on OpAI-Bench nor on Qwen"
     ),
     "seqxgpt": (
-        "HuggingFace zcahjl3/seqxgpt-detector "
-        "(trained on SeqXGPT-Bench), NOT trained on Sondos v2 nor on Qwen"
+        "Local SeqXGPT checkpoint placeholder "
+        "(trained on SeqXGPT-Bench), NOT trained on OpAI-Bench nor on Qwen"
     ),
     "gl-clic-simplified": (
         "DeBERTa-v3-base + LoRA + GRU trained from scratch on SeqXGPT-Bench, "
         "simplified trainer (not the full IJCNLP-AACL 2025 arch), "
-        "NOT trained on Sondos v2 nor on Qwen"
+        "NOT trained on OpAI-Bench nor on Qwen"
     ),
 }
 
 
-# Singular -> plural (for default_setting namespace style) and canonical singular.
+# Singular -> plural (for zero_shot_methods namespace style) and canonical singular.
 DOMAIN_SINGULAR = {
     "abstract": "abstract", "abstracts": "abstract",
     "essay": "essay", "essays": "essay",
@@ -114,7 +114,7 @@ GENERATOR_TAG = "qwen3-8b"
 
 def _cell_name(namespace: str, domain_raw: str) -> str:
     """Build the HF cell folder name per namespace style."""
-    if namespace == "default_setting":
+    if namespace == "zero_shot_methods":
         dom = DOMAIN_PLURAL[domain_raw]
     else:
         dom = DOMAIN_SINGULAR[domain_raw]
@@ -158,7 +158,7 @@ def _inject_transfer_metadata(run_config: dict, detector: str, domain: str,
     run_config = dict(run_config)  # copy
     run_config["transfer_setup"] = {
         "eval_target_generator": "qwen/Qwen3-8B",
-        "eval_target_data": "Sondos v2 (Qwen3-8B generation, April 2026)",
+        "eval_target_data": "OpAI-Bench (Qwen3-8B generation, April 2026)",
         "domain": domain,
         "training_source": DETECTOR_TRAINING_SOURCE.get(
             detector, "(unknown — add to DETECTOR_TRAINING_SOURCE)"

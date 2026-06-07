@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Test-set inference for genai-sentence-v2 on Sondos v2_updated.
+"""Test-set inference for genai-sentence-v2 on OpAI-Bench.
 
 Loads checkpoints/genai-sentence-v2/best_model.pt, runs DeBERTa+BiGRU+CRF
 with Viterbi decode, aggregates per-token predictions to per-sentence labels,
-emits HAT-Baselines JSONL schema (one record per doc, 4 cells per detector).
+emits OpAI-Bench JSONL schema (one record per doc, 4 cells per detector).
 """
 from __future__ import annotations
 import argparse, ast, json, sys, time
@@ -199,14 +199,14 @@ def run_domain(model, tokenizer, rows, device, domain, out_dir, max_length):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--ckpt', default='/datadrive/xiaohan/Omini-Text/checkpoints/genai-sentence-v2/best_model.pt')
+    p.add_argument('--ckpt', default='checkpoints/genai-sentence-v2/best_model.pt')
     p.add_argument('--csvs', nargs='+', default=[
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/essay.csv',
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/abstract.csv',
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/news.csv',
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/report.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/essay.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/abstract.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/news.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/report.csv',
     ])
-    p.add_argument('--out-dir', default='/datadrive/xiaohan/Omini-Text/results/predictions/genai-sentence-v2-fresh')
+    p.add_argument('--out-dir', default='results/predictions/genai-sentence-v2-fresh')
     p.add_argument('--split', default='test')
     p.add_argument('--max-length', type=int, default=512)
     p.add_argument('--device', default='cuda:0')

@@ -11,7 +11,7 @@ Ground truth is derived from ai_spans_char by checking ≥50% character overlap
 per sentence.
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
 
     # Run SeqXGPT (local GPU)
     python draft/sentence_level_v0v8.py --mode predict --methods seqxgpt --device cuda:2

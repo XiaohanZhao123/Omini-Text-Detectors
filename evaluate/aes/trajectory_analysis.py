@@ -16,7 +16,7 @@ with trajectory-native metrics:
    - Identifies which trajectories break detectors fastest
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
 
     # Run local detectors
     python draft/trajectory_analysis.py --mode predict --methods local --device cuda:0
@@ -54,7 +54,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-DATA_PATH = "/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl"
+DATA_PATH = "data/aes_chains_pilot_aligned.jsonl"
 PREDICTIONS_DIR = Path(__file__).resolve().parent / "results" / "trajectory_predictions"
 OUTPUT_DIR = Path(__file__).resolve().parent / "results" / "trajectory_analysis"
 

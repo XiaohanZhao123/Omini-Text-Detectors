@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package our fine-tuned detector results to match HAT-Baselines HF schema.
+"""Package our fine-tuned detector results to match OpAI-Bench HF schema.
 
 Target layout (per detector):
   tuned_on_new_data/<detector>/
@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse, json, shutil
 from pathlib import Path
 
-RESULTS_ROOT = Path("/datadrive/xiaohan/Omini-Text/results")
+RESULTS_ROOT = Path("results")
 PREDICTIONS = RESULTS_ROOT / "predictions"
 CALIBRATION = RESULTS_ROOT / "calibration"
 STAGING = RESULTS_ROOT / "hf_upload_staging"
@@ -26,7 +26,7 @@ STAGING = RESULTS_ROOT / "hf_upload_staging"
 
 ## Detector names match the existing HF layout style (plain detector name,
 ## no "-lora" suffix — the training regime is documented in provenance).
-## Source subdirs under PREDICTIONS still use the "-lora" / "-sondos" suffix
+## Source subdirs under PREDICTIONS still use the "-lora" / "-opai_bench" suffix
 ## from when we trained them; `source_subdir` maps them to the upload name.
 DETECTORS = {
     "damasha": {
@@ -45,7 +45,7 @@ DETECTORS = {
             "lora_target_modules": {"roberta": ["query", "value"], "modernbert": ["Wqkv"]},
         },
         "training": (
-            "Fine-tuned on Sondos v2 mixed (all 4 domains). Base model: "
+            "Fine-tuned on OpAI-Bench mixed (all 4 domains). Base model: "
             "DAMASHA-RMC (saiteja33/DAMASHA-RMC) checkpoint with LoRA (r=8) "
             "applied to both encoders' attention projections (RoBERTa "
             "query/value; ModernBERT fused Wqkv). CRF + fusion + info_mask + "
@@ -72,10 +72,10 @@ DETECTORS = {
             "ce_weights": [0.56, 4.50],
         },
         "training": (
-            "Fine-tuned official gigacheck classification head on Sondos v2 "
+            "Fine-tuned official gigacheck classification head on OpAI-Bench "
             "(all 4 domains). Base: Mistral-7B-v0.3. LoRA r=8 on q_proj/v_proj, "
             "classification_head fully trainable. Data: 127,809 train docs "
-            "labelled 2-class (v0 -> human; v1..v8 -> ai, matching Sondos "
+            "labelled 2-class (v0 -> human; v1..v8 -> ai, matching OpAI-Bench "
             "doc_label_gt convention and collapsing the 3-class raw data to the "
             "official 2-class gigacheck default). ce_weights=[0.56, 4.50] "
             "applied to counter the 1:8 human:AI imbalance (inverse frequency). "
@@ -86,7 +86,7 @@ DETECTORS = {
         ),
     },
     "seqxgpt": {
-        "source_subdir": "seqxgpt-sondos",
+        "source_subdir": "seqxgpt-tuned",
         "method": "seqxgpt",
         "checkpoint": "seqxgpt/seqxgpt_transformer.pt",
         "model_config": {
@@ -104,7 +104,7 @@ DETECTORS = {
         },
         "training": (
             "Per-word log-likelihood features from 4 LLMs (gpt2-xl fp32, "
-            "gpt-neo-2.7b/gpt-j-6b/llama-7b 8-bit) extracted on all Sondos v2 "
+            "gpt-neo-2.7b/gpt-j-6b/llama-7b 8-bit) extracted on all OpAI-Bench "
             "splits; training classifier = ModelWiseTransformerClassifier "
             "(CNN feature extractor per LLM + 2-layer Transformer + CRF, "
             "~1.7M params) on 8-class BMES labels (B/M/E/S x {ai, human}). "
@@ -128,7 +128,7 @@ CALIBRATION_NOTE = (
 
 
 def make_run_config(detector: str, domain: str, n_records: int, info: dict):
-    csv_path = f"data_local/external/sondos/v2/prepared/csv/{domain}.csv"
+    csv_path = f"data_local/external/opai_bench/v2/prepared/csv/{domain}.csv"
     return {
         "method": info["method"],
         "checkpoint": info["checkpoint"],
@@ -215,7 +215,7 @@ def package_detector(name: str, info: dict, src_pred_dir: Path, stage_root: Path
 
 def package_calibration(stage_root: Path, cal_root: Path):
     """Mirror our calibration/<detector>/ folder, renaming to match HF style.
-    Drops our internal '-lora'/'-sondos' suffixes and the 'hf-' prefix on
+    Drops our internal '-lora'/'-opai_bench' suffixes and the 'hf-' prefix on
     baselines. Skips intermediate-checkpoint variants (preview, epoch11)."""
     dst_top = stage_root / "calibration"
     dst_top.mkdir(parents=True, exist_ok=True)
@@ -227,7 +227,7 @@ def package_calibration(stage_root: Path, cal_root: Path):
         rename_map = {
             "damasha-lora": "damasha",
             "gigacheck-lora": "gigacheck",
-            "seqxgpt-sondos": "seqxgpt",
+            "seqxgpt-tuned": "seqxgpt",
             "hf-genai-sentence": "genai-sentence",
             "hf-genai-sentence-v2": "genai-sentence-v2",
             "hf-gl-clic": "gl-clic",
@@ -240,7 +240,7 @@ def package_calibration(stage_root: Path, cal_root: Path):
     for src_name, dst_name in [
         ("damasha-lora",         "damasha"),
         ("gigacheck-lora",       "gigacheck"),
-        ("seqxgpt-sondos",       "seqxgpt"),
+        ("seqxgpt-tuned",       "seqxgpt"),
         ("hf-genai-sentence",    "genai-sentence"),
         ("hf-genai-sentence-v2", "genai-sentence-v2"),
         ("hf-gl-clic",           "gl-clic"),

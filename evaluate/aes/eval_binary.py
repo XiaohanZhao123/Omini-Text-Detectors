@@ -4,7 +4,7 @@
 Reports accuracy, precision, recall, F1, AUROC for each method × version pair.
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/eval_binary_aes.py --methods e5-small desklib --device cuda:0
 """
 
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from omini_text import pipeline
 
-DATA_PATH = "/data/spiderman/jiachengl/detect/aes_chains_pilot_aligned.jsonl"
+DATA_PATH = "data/aes_chains_pilot_aligned.jsonl"
 OUTPUT_DIR = Path(__file__).resolve().parent / "results" / "aes_binary_eval"
 
 ALL_METHODS = [
@@ -158,7 +158,7 @@ def run_method(method_name, records, device="cuda:0"):
     # gigacheck needs PYTHONPATH for imports
     if method_name == "gigacheck":
         import os
-        gc_path = "/data/spiderman/jiachengl/Omni-text/baseline/gigacheck"
+        gc_path = str(Path(__file__).resolve().parents[2] / "baseline" / "gigacheck")
         if gc_path not in sys.path:
             sys.path.insert(0, gc_path)
 

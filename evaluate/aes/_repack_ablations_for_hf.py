@@ -11,17 +11,17 @@ Output: results/aes_doc_eval_ablations_hf_staging/
   - <namespace>/<gran>/<detector>/<cell>/{predictions.jsonl, summary.json, run_config.json}
 
 Cell naming convention (matches existing OOD/Qwen pattern in HF repo):
-  - default_setting: <plural domain>_<slice>_gemini-2.5-flash
-      e.g.  default_setting/sentence/adaloc/abstracts_ablation1_paraphrase_gemini-2.5-flash/
+  - zero_shot_methods: <plural domain>_<slice>_gemini-2.5-flash
+      e.g.  zero_shot_methods/sentence/adaloc/abstracts_ablation1_paraphrase_gemini-2.5-flash/
   - tuned_on_new_data: <singular domain>_<slice>_gemini-2.5-flash
       e.g.  tuned_on_new_data/sentence/seqxgpt/abstract_ablation2_gemini-2.5-flash/
 
 Per-detector (namespace, granularity) — same as Qwen OOD batch:
-  adaloc      → default_setting / sentence/   (paper-original ckpt)
-  damasha     → default_setting / token/      (HF base, no LoRA)
-  gigacheck   → default_setting / span/       (HF base, no LoRA)
+  adaloc      → zero_shot_methods / sentence/   (paper-original ckpt)
+  damasha     → zero_shot_methods / token/      (HF base, no LoRA)
+  gigacheck   → zero_shot_methods / span/       (HF base, no LoRA)
   gl-clic-simplified → tuned_on_new_data / sentence/   (our self-trained)
-  seqxgpt     → tuned_on_new_data / sentence/ (HF zcahjl3 ckpt)
+  seqxgpt     → tuned_on_new_data / sentence/ (local SeqXGPT checkpoint)
   sendetex    → tuned_on_new_data / sentence/ (our self-trained, partial)
 """
 import argparse
@@ -33,9 +33,9 @@ from pathlib import Path
 
 # (namespace, granularity) per detector — must match the OOD repack file's mapping
 DETECTOR_PLACEMENT = {
-    "adaloc":             ("default_setting",   "sentence"),
-    "damasha":            ("default_setting",   "token"),
-    "gigacheck":          ("default_setting",   "span"),
+    "adaloc":             ("zero_shot_methods",   "sentence"),
+    "damasha":            ("zero_shot_methods",   "token"),
+    "gigacheck":          ("zero_shot_methods",   "span"),
     "gl-clic-simplified": ("tuned_on_new_data", "sentence"),
     "gl-clic":            ("tuned_on_new_data", "sentence"),  # alias → simplified
     "seqxgpt":            ("tuned_on_new_data", "sentence"),
@@ -48,24 +48,24 @@ DETECTOR_TRAINING_SOURCE = {
     ),
     "damasha": (
         "HuggingFace base saiteja33/DAMASHA-RMC (RoBERTa + ModernBERT + CRF), "
-        "as published — NOT fine-tuned on Sondos v2 nor on these ablation generators"
+        "as published — NOT fine-tuned on OpAI-Bench nor on these ablation generators"
     ),
     "gigacheck": (
         "HuggingFace base iitolstykh/GigaCheck-Detector-Multi (Mistral-7B + DETR), "
-        "as published — NOT fine-tuned on Sondos v2 nor on these ablation generators"
+        "as published — NOT fine-tuned on OpAI-Bench nor on these ablation generators"
     ),
     "sendetex": (
         "trained from scratch on SeqXGPT-Bench (LLaMA-7B proxy), "
-        "NOT trained on Sondos v2 nor on these ablation generators"
+        "NOT trained on OpAI-Bench nor on these ablation generators"
     ),
     "seqxgpt": (
-        "HuggingFace zcahjl3/seqxgpt-detector "
-        "(trained on SeqXGPT-Bench), NOT trained on Sondos v2 nor on these ablation generators"
+        "Local SeqXGPT checkpoint placeholder "
+        "(trained on SeqXGPT-Bench), NOT trained on OpAI-Bench nor on these ablation generators"
     ),
     "gl-clic-simplified": (
         "DeBERTa-v3-base + LoRA + GRU trained from scratch on SeqXGPT-Bench, "
         "simplified trainer (not the full IJCNLP-AACL 2025 arch), "
-        "NOT trained on Sondos v2 nor on these ablation generators"
+        "NOT trained on OpAI-Bench nor on these ablation generators"
     ),
 }
 
@@ -125,7 +125,7 @@ EVAL_DOC_RE = re.compile(
 
 
 def _cell_name(namespace: str, domain_singular: str, slice_name: str) -> str:
-    if namespace == "default_setting":
+    if namespace == "zero_shot_methods":
         dom = FIELD_TO_PLURAL[domain_singular]
     else:
         dom = domain_singular
@@ -150,13 +150,13 @@ def _inject_ablation_metadata(run_config, detector, slice_name, domain, source_p
         "ablation_slice": slice_name,
         "ablation_description": ABLATION_DESCRIPTIONS.get(slice_name, "(unknown slice)"),
         "eval_target_generator": "gemini-2.5-flash",
-        "eval_target_data": f"Sondos v2 ablations — {slice_name}",
+        "eval_target_data": f"OpAI-Bench ablations — {slice_name}",
         "domain": domain,
         "training_source": DETECTOR_TRAINING_SOURCE.get(detector,
             "(unknown — add to DETECTOR_TRAINING_SOURCE)"),
         "transfer_note": (
             "Eval on a controlled-design ablation slice. The detector was not "
-            "trained on Sondos v2 or these ablation generators."
+            "trained on OpAI-Bench or these ablation generators."
         ),
         "source_local_run_dir": str(source_path),
     }
@@ -224,7 +224,7 @@ def repack(results_dir: Path, staging_dir: Path, dry_run: bool = False):
         shutil.rmtree(staging_dir)
 
     seen, dups, unknown = set(), [], []
-    by_namespace = {"default_setting": 0, "tuned_on_new_data": 0}
+    by_namespace = {"zero_shot_methods": 0, "tuned_on_new_data": 0}
 
     for detector, slice_name, domain, src in runs:
         placement = DETECTOR_PLACEMENT.get(detector)

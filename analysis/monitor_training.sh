@@ -3,7 +3,7 @@
 # Usage: bash analysis/monitor_training.sh
 set -u
 
-RUNS_ROOT=/datadrive/xiaohan/Omini-Text/results/training_runs
+RUNS_ROOT=results/training_runs
 NOW=$(date +"%Y-%m-%d %H:%M:%S")
 
 echo "============================================================"
@@ -19,7 +19,7 @@ done
 echo
 
 # --- SeqXGPT feature extraction progress -----------------------------------
-SEQXGPT_FEAT=/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features
+SEQXGPT_FEAT=data_local/external/opai_bench/v2/prepared/seqxgpt_features
 if [ -d "$SEQXGPT_FEAT" ]; then
     echo "SeqXGPT feature extraction progress:"
     for split in test dev train; do

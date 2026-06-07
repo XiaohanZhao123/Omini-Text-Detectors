@@ -1,4 +1,4 @@
-# Gemini LLM-as-Judge Detector
+# Gemini language-model detector
 # Uses Google GenAI API to classify text as human-written or AI-generated
 # Requires: GEMINI_API_KEY in .env file
 #

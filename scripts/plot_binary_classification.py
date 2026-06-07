@@ -46,7 +46,6 @@ DETECTOR_DISPLAY_NAMES: Dict[str, str] = {
     "glimpse": "Glimpse",
     "dna-detectllm": "DNA-DetectLLM",
     "gigacheck": "GigaCheck",
-    "short-phd": "Short-PHD",
 }
 
 
@@ -65,7 +64,6 @@ DETECTOR_COLORS: Dict[str, str] = {
     "glimpse": "#EDC948",
     "dna-detectllm": "#B07AA1",
     "gigacheck": "#FF9DA7",
-    "short-phd": "#9C755F",
 }
 
 _FALLBACK_COLORS = [

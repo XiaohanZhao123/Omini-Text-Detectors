@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload staged results to HAT-Baselines/baseline_results dataset repo.
+"""Upload staged results to <RESULTS_DATASET_REPO> dataset repo.
 
 Uploads:
   tuned_on_new_data/{damasha, gigacheck, seqxgpt}/*
@@ -10,14 +10,17 @@ import os, sys
 from pathlib import Path
 from huggingface_hub import HfApi, login
 
-REPO_ID = "HAT-Baselines/baseline_results"
-STAGING = Path("/datadrive/xiaohan/Omini-Text/results/hf_upload_staging")
+REPO_ID = os.environ.get("HF_RESULTS_REPO", "<RESULTS_DATASET_REPO>")
+STAGING = Path("results/hf_upload_staging")
 
 
 def main():
     token = os.environ.get("HF_TOKEN")
     if not token:
         print("Set HF_TOKEN env var", file=sys.stderr)
+        sys.exit(1)
+    if REPO_ID == "<RESULTS_DATASET_REPO>":
+        print("Set HF_RESULTS_REPO to the target dataset repository", file=sys.stderr)
         sys.exit(1)
 
     login(token=token, add_to_git_credential=False)
@@ -38,7 +41,7 @@ def main():
             path_in_repo=sub,
             repo_id=REPO_ID,
             repo_type="dataset",
-            commit_message=f"Add {sub} (fine-tuned on Sondos v2 + test-split oracle threshold calibration)",
+            commit_message=f"Add {sub} (fine-tuned on OpAI-Bench + test-split oracle threshold calibration)",
         )
 
     # Single-file uploads (top-level README)

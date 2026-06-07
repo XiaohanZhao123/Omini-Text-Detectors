@@ -37,7 +37,7 @@ This script makes that precise by measuring:
 Outputs:
   - prints a summary to stdout
   - writes per-domain JSON reports to
-    /datadrive/xiaohan/Omini-Text/results/redundancy_analysis/<domain>.json
+    results/redundancy_analysis/<domain>.json
 """
 from __future__ import annotations
 
@@ -52,10 +52,10 @@ import pandas as pd
 
 
 PREPARED_CSV_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv"
+    "data_local/external/opai_bench/v2/prepared/csv"
 )
 OUTPUT_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/results/redundancy_analysis"
+    "results/redundancy_analysis"
 )
 
 

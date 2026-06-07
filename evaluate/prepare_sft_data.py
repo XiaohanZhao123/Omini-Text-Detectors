@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prepare SFT training data for sentence-level AI text detection.
 
-Converts versioned essay data (AES chains, Sondos) into a format suitable
+Converts versioned essay data (AES chains, OpAI-Bench) into a format suitable
 for fine-tuning DeBERTa or similar models on sentence-level detection.
 
 The output format supports two training approaches:

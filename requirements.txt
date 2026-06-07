@@ -130,6 +130,6 @@ pytorch-crf
 torchcrf
 textstat
 nltk
-# LLM-as-Judge detectors
+# Language-model detector APIs
 google-genai
 anthropic

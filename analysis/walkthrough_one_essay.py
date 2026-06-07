@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 PREPARED_CSV_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv"
+    "data_local/external/opai_bench/v2/prepared/csv"
 )
 
 _WS = re.compile(r"\s+")

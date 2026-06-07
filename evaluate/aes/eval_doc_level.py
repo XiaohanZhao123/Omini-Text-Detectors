@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Document-level evaluation of detectors on AES v0-v8 data.
+"""Document-level zero-shot evaluation on versioned benchmark CSV files.
 
 Binary classification: v0 = human (label 0), v1-v8 = AI (label 1).
 
-Output format (aligned with teammate's omnitext_results):
+Output format:
   {detector}_{dataset}_{field}_{model_short}_{timestamp}/
       predictions.jsonl   — full CSV row + detection_* fields
       summary.json        — rich metrics (confusion, AUROC, AUPR, by_version, by_operation)
       run_config.json     — detector config snapshot
 
 Usage:
-    # Run on a single CSV (one AI model per file, matching teammate's convention)
+    # Run on a single CSV.
     uv run python evaluate/aes/eval_doc_level.py \\
         --methods fast-detectgpt \\
-        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \\
+        --csv <DATA_ROOT>/prepared/csv/essay.csv \\
         --split test --device cuda:0
 
-    # Run on multiple CSVs
+    # Run on multiple CSVs.
     uv run python evaluate/aes/eval_doc_level.py \\
         --methods fast-detectgpt \\
-        --csv data_local/external/sondos/v2/prepared/csv/essay.csv \\
-             data_local/external/sondos/v2/prepared/csv/abstract.csv \\
+        --csv <DATA_ROOT>/prepared/csv/essay.csv \\
+             <DATA_ROOT>/prepared/csv/abstract.csv \\
         --split test --device cuda:0
 """
 
@@ -287,7 +287,7 @@ def _metrics_of(rows):
 def compute_all_metrics(predictions):
     """Compute overall + richly-sliced metrics from prediction dicts.
 
-    Returns a dict of named slices so teammates can request new cross-tabs
+    Returns a dict of named slices so downstream analysis can request cross-tabs
     without a re-run:
       - metrics_overall
       - metrics_by_version            (sliced on `version` field)
@@ -335,7 +335,7 @@ def build_summary(
     method, dataset_name, field, model_short, csv_path, split,
     config, metrics, runtime, n_errors, git_commit, device,
 ):
-    """Build the summary.json structure matching teammate's format.
+    """Build the summary.json structure used by the evaluation artifacts.
 
     `metrics` is the full dict returned by compute_all_metrics (keys
     metrics_overall / metrics_by_version / metrics_by_generator /
@@ -375,7 +375,7 @@ def build_run_config(
     method, field, model_short, split, device, max_samples,
     csv_path, timestamp, git_commit, yaml_config,
 ):
-    """Build the run_config.json structure matching teammate's format."""
+    """Build the run_config.json structure used by the evaluation artifacts."""
     return {
         "detector": method,
         "field": field,

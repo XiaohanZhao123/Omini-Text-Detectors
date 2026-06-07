@@ -6,7 +6,7 @@ that uses adversarial training to detect AI-generated text with robustness
 against paraphrasing attacks.
 
 This script demonstrates three usage patterns:
-1. Quick experimentation with default settings
+1. Quick experimentation with standard configuration
 2. Batch processing multiple texts
 3. Config-driven reproducible setup
 
@@ -27,7 +27,7 @@ def example_1_quick_detection():
     print("Example 1: Quick Detection with Defaults")
     print("=" * 80)
 
-    # Create pipeline with default settings
+    # Create pipeline with standard configuration
     pipe = pipeline("ai-text-detection", model="radar")
 
     # Test with a sample text

@@ -27,7 +27,7 @@ NOT included (not confidence):
 Output: draft/results/native_confidence/{method}.jsonl (6 files)
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     python draft/extract_native_confidence.py
 """
 

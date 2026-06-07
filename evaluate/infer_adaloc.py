@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paper-faithful AdaLoc inference on Sondos v2_updated test split.
+"""Paper-faithful AdaLoc inference on OpAI-Bench test split.
 
 Loads checkpoints/adaloc/best_model.pt (trained by train_adaloc.py), runs
 sliding-window inference per the paper:
@@ -82,7 +82,7 @@ def words_per_sentence_split(sentences):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--ckpt', default='/datadrive/xiaohan/Omini-Text/checkpoints/adaloc/best_model.pt')
+    p.add_argument('--ckpt', default='checkpoints/adaloc/best_model.pt')
     p.add_argument('--test-json', required=True, help='AdaLoc-format JSON for one domain')
     p.add_argument('--out-dir', required=True)
     p.add_argument('--device', default='cuda:0')

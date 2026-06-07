@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Claude LLM-as-Judge Detector Example
+Claude Language Model as Detector Detector Example
 
 Demonstrates AI text detection using Claude via the Anthropic API.
 
@@ -22,7 +22,7 @@ from omini_text import pipeline
 
 def main():
     print("=" * 70)
-    print("Claude LLM-as-Judge Detector Example")
+    print("Claude Language Model as Detector Detector Example")
     print("=" * 70)
     print()
 

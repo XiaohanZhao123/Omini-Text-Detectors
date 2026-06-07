@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LoRA fine-tune DeBERTa-v3-base + BiGRU + CRF (genai-sentence-v2) on Sondos v2_updated.
+"""LoRA fine-tune DeBERTa-v3-base + BiGRU + CRF (genai-sentence-v2) on OpAI-Bench.
 
 Architecture matches baseline/genai-detect-sentence/models.py:DeBERTaBiGRUCRFTagger.
 
@@ -94,8 +94,8 @@ def _safe_list(v):
     return []
 
 
-class SondosTokenDataset(Dataset):
-    """Loads (tokens, tok_labels) pairs from Sondos prepared CSVs and tokenizes
+class OpAIBenchTokenDataset(Dataset):
+    """Loads (tokens, tok_labels) pairs from OpAI-Bench prepared CSVs and tokenizes
     with first-subword-gets-label scheme. Returns (input_ids, attn, labels)."""
 
     def __init__(self, csv_paths, split, tokenizer, max_length=512, max_docs=None):
@@ -216,12 +216,12 @@ def setup_ddp():
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--csvs', nargs='+', default=[
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/essay.csv',
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/abstract.csv',
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/news.csv',
-        '/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2_updated/prepared/csv/report.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/essay.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/abstract.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/news.csv',
+        'data_local/external/opai_bench/v2/prepared/csv/report.csv',
     ])
-    p.add_argument('--out-dir', default='/datadrive/xiaohan/Omini-Text/checkpoints/genai-sentence-v2')
+    p.add_argument('--out-dir', default='checkpoints/genai-sentence-v2')
     p.add_argument('--model-name', default='microsoft/deberta-v3-base')
     p.add_argument('--max-length', type=int, default=512)
     p.add_argument('--batch-size', type=int, default=32)
@@ -257,9 +257,9 @@ def main():
 
     log(f'[data] loading train + dev from {len(args.csvs)} CSVs ...')
     t0 = time.time()
-    train_ds = SondosTokenDataset(args.csvs, 'train', tokenizer,
+    train_ds = OpAIBenchTokenDataset(args.csvs, 'train', tokenizer,
                                   args.max_length, args.max_train_docs)
-    dev_ds = SondosTokenDataset(args.csvs, 'dev', tokenizer,
+    dev_ds = OpAIBenchTokenDataset(args.csvs, 'dev', tokenizer,
                                 args.max_length, args.max_dev_docs)
     log(f'[data] train={len(train_ds)}  dev={len(dev_ds)}  ({time.time()-t0:.1f}s)')
 

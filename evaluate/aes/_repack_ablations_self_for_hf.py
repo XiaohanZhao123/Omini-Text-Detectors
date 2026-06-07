@@ -5,7 +5,7 @@ Source: results/aes_doc_eval_ablations_self/
   - infer_damasha outputs:    <variant>/<slice>/<domain>/{predictions.jsonl,summary.json,run_config.json}
   - infer_gigacheck outputs:  <variant>/<slice>/<domain>/...   (similar)
   - eval_finetuned outputs:   gl-clic-simplified-qwen/<slice>/gl-clic_<ts>/<csv-stem>/...
-  - eval_doc_level outputs:   seqxgpt-sondos_<slice>_<field>_gemini-2.5-flash_<ts>/...
+  - eval_doc_level outputs:   seqxgpt-tuned_<slice>_<field>_gemini-2.5-flash_<ts>/...
 
 Output: results/aes_doc_eval_ablations_self_hf_staging/
   - <namespace>/<gran>/<detector>/<cell>/{predictions.jsonl,summary.json,run_config.json}
@@ -19,7 +19,7 @@ HF folders where ckpt matches; creates new folders for novel ckpts.
   gigacheck-lora-v2        → tuned_on_new_data/doc/gigacheck/         (existing v2-LoRA folder)
   gigacheck-lora-qwen      → tuned_on_new_data/doc/gigacheck-lora-qwen/  (new)
   gl-clic-simplified-qwen  → tuned_on_new_data/sentence/gl-clic-simplified-qwen/  (new)
-  seqxgpt-sondos           → tuned_on_new_data/sentence/seqxgpt-sondos/  (new)
+  seqxgpt-tuned           → tuned_on_new_data/sentence/seqxgpt-tuned/  (new)
 
 Cell naming: tuned_on_new_data convention is singular domain.
 Pattern: `<domain>_<slice>_gemini-2.5-flash`.
@@ -38,33 +38,33 @@ DETECTOR_PLACEMENT = {
     "gigacheck-lora-v2":       ("tuned_on_new_data", "doc",      "gigacheck"),
     "gigacheck-lora-qwen":     ("tuned_on_new_data", "doc",      "gigacheck-lora-qwen"),
     "gl-clic-simplified-qwen": ("tuned_on_new_data", "sentence", "gl-clic-simplified-qwen"),
-    "seqxgpt-sondos":          ("tuned_on_new_data", "sentence", "seqxgpt-sondos"),
+    "seqxgpt-tuned":          ("tuned_on_new_data", "sentence", "seqxgpt-tuned"),
 }
 
 DETECTOR_TRAINING_SOURCE = {
     "damasha-lora-v2": (
         "HuggingFace base saiteja33/DAMASHA-RMC + LoRA r=8 fine-tuned on "
-        "Sondos v2 (gemini + gpt-5.4 + gpt-5.4-nano), 5 epochs"
+        "OpAI-Bench (gemini + gpt-5.4 + gpt-5.4-nano), 5 epochs"
     ),
     "damasha-lora-qwen": (
         "HuggingFace base saiteja33/DAMASHA-RMC + LoRA r=8 fine-tuned on "
-        "Sondos v2 Qwen3-8B subset (task 2 continual fine-tune), 3 epochs"
+        "OpAI-Bench Qwen3-8B subset (task 2 continual fine-tune), 3 epochs"
     ),
     "gigacheck-lora-v2": (
         "HuggingFace base iitolstykh/GigaCheck-Detector-Multi (Mistral-7B + DETR) + "
-        "LoRA r=8 fine-tuned on Sondos v2 (gemini + gpt-5.4 + gpt-5.4-nano), 5 epochs"
+        "LoRA r=8 fine-tuned on OpAI-Bench (gemini + gpt-5.4 + gpt-5.4-nano), 5 epochs"
     ),
     "gigacheck-lora-qwen": (
         "HuggingFace base iitolstykh/GigaCheck-Detector-Multi + LoRA r=8 fine-tuned on "
-        "Sondos v2 Qwen3-8B subset (task 2 continual fine-tune), 3 epochs"
+        "OpAI-Bench Qwen3-8B subset (task 2 continual fine-tune), 3 epochs"
     ),
     "gl-clic-simplified-qwen": (
-        "DeBERTa-v3-base + LoRA + GRU trained from scratch on Sondos v2 Qwen3-8B subset "
+        "DeBERTa-v3-base + LoRA + GRU trained from scratch on OpAI-Bench Qwen3-8B subset "
         "(simplified arch, our trainer), 3 epochs"
     ),
-    "seqxgpt-sondos": (
+    "seqxgpt-tuned": (
         "ModelWiseTransformerClassifier (CNN+Transformer+CRF) trained from scratch on "
-        "Sondos v2 4-LLM log-prob features (binary AI/human BMES, 8 classes), our trainer"
+        "OpAI-Bench 4-LLM log-prob features (binary AI/human BMES, 8 classes), our trainer"
     ),
 }
 
@@ -101,10 +101,10 @@ ALLOWED_SLICES = {"ablation1_paraphrase", "ablation1_compress", "ablation1_expan
                   "ablation2", "ablation3"}
 
 
-# Pattern for eval_doc_level outputs (seqxgpt-sondos):
-#   seqxgpt-sondos_<slice>_<field>_gemini-2.5-flash_<ts>/
+# Pattern for eval_doc_level outputs (seqxgpt-tuned):
+#   seqxgpt-tuned_<slice>_<field>_gemini-2.5-flash_<ts>/
 EVAL_DOC_RE = re.compile(
-    r"^(?P<det>seqxgpt-sondos)_"
+    r"^(?P<det>seqxgpt-tuned)_"
     r"(?P<slice>ablation\d+(?:_\w+)?)_"
     r"(?P<field>abstracts|essays|newss|news|reports)_"
     rf"{re.escape(GENERATOR_TAG)}_"
@@ -130,7 +130,7 @@ def _inject_ablation_metadata(run_config, detector, slice_name, domain, source_p
         "ablation_slice": slice_name,
         "ablation_description": ABLATION_DESCRIPTIONS.get(slice_name, "(unknown)"),
         "eval_target_generator": "gemini-2.5-flash",
-        "eval_target_data": f"Sondos v2 ablations — {slice_name}",
+        "eval_target_data": f"OpAI-Bench ablations — {slice_name}",
         "domain": domain,
         "training_source": DETECTOR_TRAINING_SOURCE.get(
             detector, "(unknown — add to DETECTOR_TRAINING_SOURCE)"
@@ -210,9 +210,9 @@ def collect_glclic_qwen(results_dir: Path):
                        FIELD_TO_SINGULAR[field], sub)
 
 
-def collect_seqxgpt_sondos(results_dir: Path):
-    """seqxgpt-sondos layout (eval_doc_level): flat <det>_<slice>_<field>_<gen>_<ts>/."""
-    for d in sorted(results_dir.glob("seqxgpt-sondos_*_gemini-2.5-flash_*")):
+def collect_seqxgpt_opai_bench(results_dir: Path):
+    """seqxgpt-tuned layout (eval_doc_level): flat <det>_<slice>_<field>_<gen>_<ts>/."""
+    for d in sorted(results_dir.glob("seqxgpt-tuned_*_gemini-2.5-flash_*")):
         if not d.is_dir():
             continue
         m = EVAL_DOC_RE.match(d.name)
@@ -233,7 +233,7 @@ def repack(results_dir: Path, staging_dir: Path, dry_run: bool = False):
     runs += list(collect_infer_outputs(results_dir, "gigacheck-lora-v2"))
     runs += list(collect_infer_outputs(results_dir, "gigacheck-lora-qwen"))
     runs += list(collect_glclic_qwen(results_dir))
-    runs += list(collect_seqxgpt_sondos(results_dir))
+    runs += list(collect_seqxgpt_opai_bench(results_dir))
     runs.sort()
     print(f"Found {len(runs)} self-train ablation source runs")
 

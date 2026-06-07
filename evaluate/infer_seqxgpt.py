@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Test-set inference for the trained SeqXGPT classifier on Sondos v2.
+"""Test-set inference for the trained SeqXGPT classifier on OpAI-Bench.
 
-Loads checkpoints/seqxgpt-sondos/seqxgpt_transformer.pt, reads the test-split
+Loads checkpoints/seqxgpt-tuned/seqxgpt_transformer.pt, reads the test-split
 features (already extracted for all 4 LLMs via analysis/extract_seqxgpt_features.py),
 runs the CNN+Transformer+CRF classifier with Viterbi decode, emits predictions
-in the HAT-Baselines JSONL schema.
+in the OpAI-Bench JSONL schema.
 
 BMES outputs are reduced to binary (human vs AI) by checking the label class
 string (anything matching *-ai -> 1; anything matching *-human -> 0).
@@ -185,12 +185,12 @@ def run(args):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--ckpt", default="checkpoints/seqxgpt-sondos/seqxgpt_transformer.pt")
+    p.add_argument("--ckpt", default="checkpoints/seqxgpt-tuned/seqxgpt_transformer.pt")
     p.add_argument("--feat-root",
-                   default="/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features")
+                   default="data_local/external/opai_bench/v2/prepared/seqxgpt_features")
     p.add_argument("--split", default="test")
     p.add_argument("--out-dir",
-                   default="/datadrive/xiaohan/Omini-Text/results/predictions/seqxgpt-sondos")
+                   default="results/predictions/seqxgpt-tuned")
     p.add_argument("--seq-len", type=int, default=1024)
     p.add_argument("--max-docs", type=int, default=None)
     p.add_argument("--device", default="cuda:0")

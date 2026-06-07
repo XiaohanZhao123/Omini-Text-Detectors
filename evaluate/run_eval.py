@@ -3,7 +3,7 @@
 
 Usage:
     python run_eval.py e5-small aes_chains
-    python run_eval.py binoculars sondos_essays
+    python run_eval.py binoculars opai_bench_essays
     python run_eval.py e5-small aes_chains --max 500
     python run_eval.py all aes_chains          # run all detectors
 """
@@ -23,7 +23,7 @@ from omini_text import pipeline
 ALL_DETECTORS = [
     "e5-small", "desklib", "radar", "binoculars",
     "fast-detectgpt", "dna-detectllm", "ood-llm-detect",
-    "gigacheck", "short-phd",
+    "gigacheck",
 ]
 
 

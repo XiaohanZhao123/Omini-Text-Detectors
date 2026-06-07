@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paper-faithful AdaLoc + LoRA fine-tune on Sondos v2_updated.
+"""Paper-faithful AdaLoc + LoRA fine-tune on OpAI-Bench.
 
 Architecture (per RobertaSentenceHead in baseline/mgt-localization/AdaLoc/roberta_adaloc.py):
   - roberta-large-openai-detector (frozen except LoRA on q/v)
@@ -163,9 +163,9 @@ def setup_ddp():
 # ---------- Training ----------
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--train-json', default='/datadrive/xiaohan/Omini-Text/data_local/adaloc_json/train_all.json')
-    p.add_argument('--dev-json', default='/datadrive/xiaohan/Omini-Text/data_local/adaloc_json/dev_all.json')
-    p.add_argument('--out-dir', default='/datadrive/xiaohan/Omini-Text/checkpoints/adaloc')
+    p.add_argument('--train-json', default='data_local/adaloc_json/train_all.json')
+    p.add_argument('--dev-json', default='data_local/adaloc_json/dev_all.json')
+    p.add_argument('--out-dir', default='checkpoints/adaloc')
     p.add_argument('--roberta-name', default='roberta-large-openai-detector')
     p.add_argument('--max-length', type=int, default=512)
     p.add_argument('--batch-size', type=int, default=32)

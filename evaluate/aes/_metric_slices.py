@@ -5,7 +5,7 @@ Both ``evaluate/aes/eval_doc_level.py`` and
 (version / generator / operation / version×generator / operation×generator /
 AI-ratio bucket). The SLICING logic is shared; the per-group METRIC
 computation differs between the two (they emit different schemas — one mirrors
-teammate's calibrated-threshold format on HF, the other mirrors the raw
+the calibrated-threshold result format, the other mirrors the raw
 ``eval_doc_level.py`` format). So this module exposes only the partition
 primitives plus the key functions. Keep the metric functions separate in each
 eval script.

@@ -172,7 +172,7 @@ def _load_csv_lookup(repo_root: Path, csv_relpath: str):
     csv_path = repo_root / csv_relpath
     if not csv_path.exists():
         # try alternate roots that the run_config might have used
-        alt = Path('/datadrive/xiaohan/Omini-Text') / csv_relpath
+        alt = Path('.') / csv_relpath
         if alt.exists():
             csv_path = alt
         else:
@@ -351,8 +351,8 @@ def aggregate_cell(method: str, level: str, cell_dir: Path, repo_root: Path = Pa
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--mirror-dir', default='/datadrive/xiaohan/Omini-Text/results/hf_mirror/tuned_on_new_data')
-    p.add_argument('--out-dir', default='/datadrive/xiaohan/Omini-Text/results/aggregates/tuned_on_new_data')
+    p.add_argument('--mirror-dir', default='results/hf_mirror/tuned_on_new_data')
+    p.add_argument('--out-dir', default='results/aggregates/tuned_on_new_data')
     args = p.parse_args()
 
     mirror = Path(args.mirror_dir)

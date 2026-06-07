@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract SeqXGPT per-word log-likelihood features from 4 LLMs on Sondos v2.
+"""Extract SeqXGPT per-word log-likelihood features from 4 LLMs on OpAI-Bench.
 
 SeqXGPT is a "forward-pass only" detector: each of 4 LLMs scores every word's
 log-likelihood under that LLM, and a tiny downstream CRF+Transformer classifier
@@ -18,7 +18,7 @@ Design:
     (BBPETokenizerPPLCalc / SPLlamaTokenizerPPLCalc from baseline/seqxgpt/...).
 
 Output layout:
-  /datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features/
+  data_local/external/opai_bench/v2/prepared/seqxgpt_features/
     {split}/
       {llm_name}.jsonl       one entry per doc: {doc_id, ll_tokens, begin_idx}
       meta.jsonl             one entry per doc: {doc_id, split, domain, essay_id,
@@ -47,10 +47,10 @@ for p in (_REPO_ROOT, _SEQ_ROOT, _SEQ_CLASSIFIER):
         sys.path.insert(0, str(p))
 
 PREPARED_CSV_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/csv"
+    "data_local/external/opai_bench/v2/prepared/csv"
 )
 OUT_DIR = Path(
-    "/datadrive/xiaohan/Omini-Text/data_local/external/sondos/v2/prepared/seqxgpt_features"
+    "data_local/external/opai_bench/v2/prepared/seqxgpt_features"
 )
 
 
@@ -163,7 +163,7 @@ def main():
     ap.add_argument("--csv-dir", default=str(PREPARED_CSV_DIR),
                     help="Directory containing <domain>.csv prepared files")
     ap.add_argument("--cache-dir",
-                    default="/datadrive/xiaohan/Omini-Text/cache")
+                    default="cache")
     ap.add_argument("--flush-every", type=int, default=50,
                     help="Flush jsonl output every N docs")
     ap.add_argument("--max-docs-per-split", type=int, default=None,

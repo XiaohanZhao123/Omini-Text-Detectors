@@ -7,7 +7,7 @@ Changes from official:
   2. compute_metrics(): add token-level AI F1 for checkpoint selection
 
 Usage:
-    cd /data/spiderman/jiachengl/Omni-text
+    cd <REPO_ROOT>
     bash draft/train_gigacheck_aes.sh
 """
 

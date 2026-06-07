@@ -6,7 +6,7 @@ Shows how detector accuracy changes as AI editing ratio increases.
 Usage:
     python run_sentence_eval.py e5-small data/aes_chains_pilot.jsonl
     python run_sentence_eval.py seqxgpt data/aes_chains_pilot.jsonl
-    python run_sentence_eval.py e5-small data/external/sondos/prepared/essays_prepared.jsonl
+    python run_sentence_eval.py e5-small data/external/opai_bench/prepared/essays_prepared.jsonl
 
 The script auto-detects the data format and detector type.
 """

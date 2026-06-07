@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OpenAI GPT LLM-as-Judge Detector Example
+OpenAI GPT Language Model as Detector Detector Example
 
 Demonstrates AI text detection using GPT-5.2 via the OpenAI API.
 
@@ -22,7 +22,7 @@ from omini_text import pipeline
 
 def main():
     print("=" * 70)
-    print("OpenAI GPT LLM-as-Judge Detector Example")
+    print("OpenAI GPT Language Model as Detector Detector Example")
     print("=" * 70)
     print()
 

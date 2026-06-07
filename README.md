@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A unified interface for 9 state-of-the-art AI text detection methods, spanning zero-shot, supervised, and boundary detection approaches. Part of the [Omini-Detect](https://github.com/your-org/omini-detect) project.
+A unified interface for AI text detection methods and evaluation utilities, spanning zero-shot, supervised, sentence-level, token-level, span-level, and language-model-as-detector approaches.
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ print(result)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and setup
-git clone https://github.com/your-org/Omini-Text.git
+git clone <REPOSITORY_URL>
 cd Omini-Text
 uv venv                              # Create virtual environment
 uv pip sync requirements.lock        # Install locked dependencies (reproducible)
@@ -43,7 +43,7 @@ source .venv/bin/activate            # Activate
 ### Using pip
 
 ```bash
-git clone https://github.com/your-org/Omini-Text.git
+git clone <REPOSITORY_URL>
 cd Omini-Text
 pip install -r requirements.txt
 ```
@@ -54,19 +54,29 @@ For Glimpse detector, set your OpenAI API key in `.env` (see `.env.example`).
 
 | Detector | Type | Venue | Key Feature | Hardware | Pretrained |
 |----------|------|-------|-------------|----------|------------|
-| [e5-small](#e5-small-lora) | Supervised | MS Hackathon '24 | 93.9% RAID accuracy | CPU/GPU | ✅ |
-| [RADAR](#radar) | Supervised | NeurIPS 2023 | Adversarial robustness | CPU/GPU | ✅ |
-| [Desklib](#desklib) | Supervised | - | Simple baseline | CPU/GPU | ✅ |
+| [e5-small](#e5-small-lora) | Zero-shot method | MS Hackathon '24 | Off-the-shelf RAID detector | CPU/GPU | ✅ |
+| [RADAR](#radar) | Zero-shot method | NeurIPS 2023 | Adversarial robustness | CPU/GPU | ✅ |
+| [Desklib](#desklib) | Zero-shot method | - | Simple off-the-shelf baseline | CPU/GPU | ✅ |
+| DetectLLM | Zero-shot method | ACL 2024 | Log-likelihood/log-rank ratio | GPU | ✅ |
 | [Fast-DetectGPT](#fast-detectgpt) | Zero-shot | ICLR 2024 | 340× faster than DetectGPT | GPU (6-16GB) | ✅ |
+| OOD-LLM-Detect | Zero-shot method | ACL 2023 | OOD embedding detector | CPU/GPU | ✅ |
+| RoBERTa-OpenAI | Zero-shot method | - | GPT-2 detector baseline | CPU/GPU | ✅ |
 | [Binoculars](#binoculars) | Zero-shot | ICML 2024 | Perplexity ratio analysis | GPU (~14GB) | ✅ |
 | [Glimpse](#glimpse) | Zero-shot | ICLR 2025 | Detects GPT-4/Claude/Gemini | CPU + API | ✅ |
+| AdaLoc | Sentence-level | ACL 2024 | Localizes machine-generated sentences | GPU | ✅ |
+| GenAI-Sentence | Sentence-level | arXiv 2025 | Sentence-level segmentation | GPU | ✅ |
+| GL-CLiC | Sentence-level | IJCNLP 2025 | Sentence-level classifier | GPU | ✅ |
+| DAMASHA | Token-level | arXiv 2026 | Token-level source localization | GPU | ✅ |
 | [GigaCheck](#gigacheck) | Boundary | arXiv 2024 | AI text interval detection (official) | GPU (~14GB) | ✅ |
 | [SeqXGPT](#seqxgpt) | Boundary | EMNLP 2023 | Sentence-level BIOES (reproduction) | GPU (~28GB) | ✅* |
+| OpenAI / Gemini / Claude | Language Model as Detector | API | Structured per-document or per-sentence labels | API | ✅ |
 | [RoFT](#roft-boundary) | Boundary | arXiv 2023 | Training-free NLL boundary | GPU (~1-2GB) | ✅ |
 
-*SeqXGPT requires training but we provide pretrained checkpoint at `zcahjl3/seqxgpt-detector`
+*SeqXGPT requires a trained classifier checkpoint. The paper authors provide the training and inference code in the original repository; follow that repository to reproduce a compatible checkpoint, then pass the local checkpoint path with `checkpoint_path`.
 
-### Supervised Methods (trained on AI text)
+### Zero-Shot Methods
+
+In the benchmark code, **Zero-Shot Methods** means detectors used without fitting on the benchmark training split. Some of these methods are supervised detectors trained elsewhere; they are still zero-shot with respect to the benchmark distribution.
 
 #### e5-small LoRA
 [[Model](https://huggingface.co/MayZhou/e5-small-lora-ai-generated-detector)]
@@ -95,7 +105,7 @@ Simple transformer classifier with mean pooling. Good baseline for experiments a
 pipe = pipeline("ai-text-detection", model="desklib")
 ```
 
-### Zero-Shot Methods (no training needed)
+### Additional Zero-Shot Detectors
 
 #### Fast-DetectGPT
 [[Paper](https://arxiv.org/abs/2310.05130)] [[Code](https://github.com/baoguangsheng/fast-detect-gpt)]
@@ -122,6 +132,18 @@ ICLR 2025. Bridges white-box detection with proprietary LLMs (GPT-4, Claude, Gem
 
 ```python
 pipe = pipeline("ai-text-detection", model="glimpse")
+```
+
+### Language Model as Detector
+
+Language-model detectors query an API model with structured output and return the same normalized `label`, `score`, and `metadata` fields as local detectors.
+
+```python
+pipe = pipeline("ai-text-detection", model="openai-detector")
+result = pipe("Your text here")
+
+gemini_pipe = pipeline("ai-text-detection", model="gemini")
+claude_pipe = pipeline("ai-text-detection", model="claude")
 ```
 
 ### Boundary Detection (character-level segmentation)
@@ -154,9 +176,9 @@ for start, end in result["metadata"]["ai_intervals"]:
 ```
 
 #### SeqXGPT
-[[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)] [[Checkpoint](https://huggingface.co/zcahjl3/seqxgpt-detector)]
+[[Paper](https://arxiv.org/abs/2310.08903)] [[Code](https://github.com/Jihuai-wpy/SeqXGPT)]
 
-EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2, GPT-Neo-1.3B, GPT-J-6B, LLaMA-7B). Uses BIOES sequence labeling with 6-class source attribution. We provide pretrained checkpoint.
+EMNLP 2023. Sentence-level AI text detection using log-probability features from 4 LLMs (GPT-2 XL, GPT-Neo 2.7B, GPT-J 6B, LLaMA 7B). Uses BIOES sequence labeling with 6-class source attribution. The original repository contains the reproduction path for preparing features and training the classifier checkpoint.
 
 **~28GB VRAM** (4 models, distribute with `feature_devices`)
 
@@ -165,6 +187,7 @@ pipe = pipeline(
     "ai-text-detection",
     model="seqxgpt",
     device="cuda:0",
+    checkpoint_path="<LOCAL_SEQXGPT_CHECKPOINT>",
     feature_devices=['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']  # Distribute 4 models
 )
 

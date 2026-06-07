@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gemini LLM-as-Judge Detector Example
+Gemini Language Model as Detector Detector Example
 
 Demonstrates AI text detection using Gemini via the Google GenAI API.
 
@@ -22,7 +22,7 @@ from omini_text import pipeline
 
 def main():
     print("=" * 70)
-    print("Gemini LLM-as-Judge Detector Example")
+    print("Gemini Language Model as Detector Detector Example")
     print("=" * 70)
     print()
 
