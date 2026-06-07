@@ -148,7 +148,7 @@ class DetectLLMDetector(BaseDetector):
 
         token_scores = self._compute_token_scores(pred_logits, labels)
 
-        # Map subword scores → word-level scores
+        # Map subword scores → word-level scores (used only for per-word labels)
         words = text.split()
         word_scores = self._map_to_words(words, text, offsets, token_scores)
 
@@ -165,9 +165,10 @@ class DetectLLMDetector(BaseDetector):
                 p_ai = float(1.0 / (1.0 + np.exp(-(ws - self.threshold))))
                 word_logits.append([1.0 - p_ai, p_ai])
 
-        # Document-level: mean score across words
-        valid_scores = [s for s in word_scores if s is not None]
-        doc_score = float(np.mean(valid_scores)) if valid_scores else 0.0
+        # Document-level score — paper's formula (§3.1 of arXiv 2306.05540).
+        # Averaging per-token scores at the word level is a different statistic and
+        # destroys separation (see evaluate/reproductions/WRAPPER_FIXES_TODO.md).
+        doc_score = self._compute_doc_score(pred_logits, labels)
         doc_p_ai = float(1.0 / (1.0 + np.exp(-(doc_score - self.threshold))))
         doc_label = 1 if doc_p_ai >= 0.5 else 0
 
@@ -244,6 +245,48 @@ class DetectLLMDetector(BaseDetector):
                 valid_max = lrr_np[~rank1_mask].max() if (~rank1_mask).any() else 1.0
                 lrr_np[rank1_mask] = valid_max + 1.0
             return lrr_np  # higher = more AI
+
+        raise ValueError(f"Unknown metric: {self.metric}")
+
+    def _compute_doc_score(self, logits, labels) -> float:
+        """Paper's document-level score per metric — NOT the mean of per-token scores.
+
+        For LRR the paper defines LRR = |Σ log p / Σ log r| = (-Σ log p) / (Σ log r) over
+        the whole document; the mean of per-token ratios is a different statistic.
+        Convention preserved: HIGHER = more AI-like.
+        """
+        log_probs = F.log_softmax(logits, dim=-1)
+        token_log_probs = log_probs.gather(
+            dim=-1, index=labels.unsqueeze(-1)
+        ).squeeze(-1).float()  # (seq_len,), negative
+
+        if self.metric == "likelihood":
+            return float(token_log_probs.mean().item())  # higher log p → more AI
+
+        if self.metric == "entropy":
+            probs = F.softmax(logits, dim=-1)
+            ent = -(probs * log_probs).sum(dim=-1)
+            return float(-ent.mean().item())  # lower entropy → more AI → negate
+
+        expanded = labels.unsqueeze(-1)
+        ranks = (logits > logits.gather(-1, expanded)).sum(-1).float() + 1
+        log_ranks = torch.log(ranks)
+
+        if self.metric == "rank":
+            return float(-ranks.mean().item())  # lower rank → more AI → negate
+
+        if self.metric == "logrank":
+            return float(-log_ranks.mean().item())
+
+        if self.metric == "lrr":
+            # Paper §3.1 / upstream baselines/all_baselines.py:
+            # LRR = -mean(log p) / mean(log r) = (-Σ log p) / (Σ log r), all tokens
+            # (no rank-1 filter — log(1)=0 is kept in the sum, matching upstream).
+            num = float(-token_log_probs.sum().item())
+            den = float(log_ranks.sum().item())
+            if den < 1e-6:
+                return 0.0
+            return num / den  # higher = more AI
 
         raise ValueError(f"Unknown metric: {self.metric}")
 

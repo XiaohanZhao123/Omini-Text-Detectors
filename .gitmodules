@@ -1,3 +1,9 @@
 [submodule "baseline/gigacheck"]
 	path = baseline/gigacheck
 	url = https://github.com/ai-forever/gigacheck
+[submodule "baseline/dna-detect-llm"]
+	path = baseline/dna-detect-llm
+	url = https://github.com/Xiaoweizhu57/DNA-DetectLLM
+[submodule "baseline/ood-llm-detect"]
+	path = baseline/ood-llm-detect
+	url = https://github.com/cong-zeng/ood-llm-detect

@@ -12,7 +12,12 @@ model_path: iitolstykh/GigaCheck-Detector-Multi  # HuggingFace model path
 device: auto  # Options: "auto", "cuda", "cuda:0", "cpu"
 
 # Detection Parameters
-conf_interval_thresh: 0.8  # Confidence threshold for AI intervals (0.0-1.0)
+# `conf_interval_thresh` = 0.0 matches the paper / upstream's benchmark protocol
+# (`baseline/gigacheck/gigacheck/train/scripts/train_detr_model.py` evaluates mAP
+# with no confidence filter — the full ranked set is needed for precision-recall
+# sweeps). Raising this filters low-confidence predictions post-hoc — useful for
+# display, harmful for leaderboard-style mAP. Keep 0.0 for paper-faithful behaviour.
+conf_interval_thresh: 0.0
 
 # Model Details:
 # - Architecture: Mistral-7B backbone + DETR for interval detection
